@@ -1,0 +1,27 @@
+[project]
+name = "youtube-studio-mcp"
+version = "0.1.0"
+description = "MCP server (stdio) for the owner's YouTube channel data"
+readme = "readme.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=2.2,<3",
+    "google-api-python-client>=2.200",
+    "google-auth-oauthlib>=1.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9"]
+
+[project.scripts]
+youtube-studio-mcp = "youtube_studio_mcp.__main__:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

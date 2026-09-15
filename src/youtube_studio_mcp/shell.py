@@ -9,7 +9,7 @@ import cmd
 import shlex
 from collections.abc import Callable
 
-COMMANDS = ("overview", "metrics", "videos", "retention", "pillars", "auth")  # serve/shell make no sense inside the shell
+COMMANDS = ("overview", "metrics", "videos", "retention", "pillars", "efficiency", "auth")  # serve/shell make no sense inside the shell
 EXIT = ("exit", "quit")
 
 

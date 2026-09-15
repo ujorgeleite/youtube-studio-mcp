@@ -60,6 +60,14 @@ def build_server(get_services: Callable[[], Services]) -> MCPServer:
         land in a 'não classificado' bucket. Derived from cached metrics."""
         return guard(lambda: get_services().pillar.analyze(start_date, end_date))
 
+    @server.tool(annotations=read_only)
+    def rank_video_efficiency(start_date: str | None = None, end_date: str | None = None) -> dict:
+        """Rank videos by efficiency within each format (longos vs shorts) over a date
+        range. Efficiency criteria: retention (averageViewPercentage), subscribers
+        gained, comments and likes. Returns every raw metric per video plus a
+        transparent min-max score, so a downstream library can re-weight and decide."""
+        return guard(lambda: get_services().efficiency.rank(start_date, end_date))
+
     return server
 
 

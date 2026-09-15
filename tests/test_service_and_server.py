@@ -23,6 +23,7 @@ TOOL_NAMES = [
     "list_videos",
     "get_retention_curve",
     "analyze_pillar_performance",
+    "rank_video_efficiency",
 ]
 
 
@@ -41,7 +42,9 @@ def _channel_service(fetcher):
 
 def _services(fetcher):
     # Only the channel service is exercised here; the rest are wired at __main__.
-    return Services(channel=_channel_service(fetcher), analytics=None, library=None, pillar=None)
+    return Services(
+        channel=_channel_service(fetcher), analytics=None, library=None, pillar=None, efficiency=None
+    )
 
 
 def test_service_uses_cache_unless_refresh():

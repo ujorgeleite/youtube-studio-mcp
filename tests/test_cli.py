@@ -13,7 +13,7 @@ OVERVIEW = {"channel_id": "UC123", "title": "My Channel", "subscriber_count": 15
 
 def test_overview_prints_json(monkeypatch, capsys):
     channel = ChannelService(Cache(":memory:"), lambda: OVERVIEW, ttl_seconds=3600)
-    services = Services(channel=channel, analytics=None, library=None, pillar=None)
+    services = Services(channel=channel, analytics=None, library=None, pillar=None, efficiency=None)
     monkeypatch.setattr(cli, "build_services", lambda settings: services)
 
     cli.main(["overview", "--refresh"])

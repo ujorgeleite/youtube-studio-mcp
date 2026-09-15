@@ -12,6 +12,7 @@ Tools:
 | `list_videos` | every uploaded video (id, title, publish date, ISO-8601 duration) |
 | `get_retention_curve` | audience retention curve for one video |
 | `analyze_pillar_performance` | watch time and retention grouped and ranked by content pillar |
+| `rank_video_efficiency` | videos ranked by efficiency within longos vs shorts (retention, subscribers, comments, likes) — raw metrics + a transparent score for downstream decision-making |
 
 > ⚠️ **Phase 1 requires re-consenting once.** The Analytics tools need the added
 > `yt-analytics.readonly` scope, and adding a scope does not widen an existing token.
@@ -96,6 +97,7 @@ One-shot commands:
 .venv/bin/youtube-studio-mcp videos
 .venv/bin/youtube-studio-mcp retention <VIDEO_ID>
 .venv/bin/youtube-studio-mcp pillars
+.venv/bin/youtube-studio-mcp efficiency
 ```
 
 To add a command for a new tool: add a subparser in `cli.build_parser`, handle it in

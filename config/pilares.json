@@ -1,5 +1,9 @@
 {
-  "dQw4w9WgXcQ": { "pilar": "imigracao", "formato": "vlog", "seo": true },
-  "abc123EXAMPLE": { "pilar": "holanda", "formato": "guia", "seo": true },
-  "xyz789EXAMPLE": { "pilar": "doceria", "formato": "receita", "seo": false }
+  "jJ-FsTctYEQ": { "pilar": "imigracao", "formato": "vlog",  "seo": true },
+  "4GXPaPg60sQ": { "pilar": "imigracao", "formato": "vlog",  "seo": true },
+  "WiPYT_zHTUY": { "pilar": "imigracao", "formato": "short", "seo": false },
+  "r2fUvVDL9vg": { "pilar": "holanda",   "formato": "vlog",  "seo": false },
+  "WVKWbz5jwXQ": { "pilar": "pedro",     "formato": "short", "seo": false },
+  "3gUu2ZQu2Vo": { "pilar": "pedro",     "formato": "short", "seo": false },
+  "cf641CTiq-M": { "pilar": "pedro",     "formato": "vlog",  "seo": false }
 }

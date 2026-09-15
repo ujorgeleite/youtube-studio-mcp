@@ -15,6 +15,8 @@ ANALYTICS_STABLE_TTL = 60 * 60 * 24 * 30
 VIDEO_LIST_TTL = 60 * 60 * 6
 RETENTION_TTL = 60 * 60 * 24 * 30
 
+SHORT_MAX_SECONDS = 180
+
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 

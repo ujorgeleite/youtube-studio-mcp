@@ -18,6 +18,7 @@ from .service import (
     ChannelService,
     PillarService,
     Services,
+    VideoEfficiencyService,
     VideoLibraryService,
 )
 from .shell import Shell
@@ -39,7 +40,14 @@ def build_services(settings: Settings) -> Services:
         load_pillars=lambda: load_pillars(settings.pillars_file),
         default_range=analytics.default_range,
     )
-    return Services(channel=channel, analytics=analytics, library=library, pillar=pillar)
+    efficiency = VideoEfficiencyService(
+        list_videos=lambda: library.list_videos()["videos"],
+        video_efficiency=analytics.get_video_efficiency,
+        default_range=analytics.default_range,
+    )
+    return Services(
+        channel=channel, analytics=analytics, library=library, pillar=pillar, efficiency=efficiency
+    )
 
 
 def main(argv: list[str] | None = None) -> None:

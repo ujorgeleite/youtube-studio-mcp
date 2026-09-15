@@ -50,6 +50,10 @@ def build_parser() -> tuple[argparse.ArgumentParser, dict[str, argparse.Argument
     pillars.add_argument("--start", help="start date YYYY-MM-DD")
     pillars.add_argument("--end", help="end date YYYY-MM-DD")
 
+    efficiency = add("efficiency", "rank videos by efficiency within longos vs shorts")
+    efficiency.add_argument("--start", help="start date YYYY-MM-DD")
+    efficiency.add_argument("--end", help="end date YYYY-MM-DD")
+
     return parser, commands
 
 
@@ -69,6 +73,8 @@ def run_command(args: argparse.Namespace, settings: Settings, get_services: Call
             _print_json(get_services().analytics.get_retention_curve(args.video_id, refresh=args.refresh))
         elif args.command == "pillars":
             _print_json(get_services().pillar.analyze(args.start, args.end))
+        elif args.command == "efficiency":
+            _print_json(get_services().efficiency.rank(args.start, args.end))
     except EXPECTED_ERRORS as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

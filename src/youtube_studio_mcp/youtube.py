@@ -1,8 +1,19 @@
 """Thin YouTube Data API v3 client."""
 
+import re
 from typing import TypedDict
 
 from googleapiclient.discovery import build
+
+_DURATION_RE = re.compile(r"P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?")
+
+
+def duration_seconds(iso_duration: str) -> int:
+    match = _DURATION_RE.fullmatch(iso_duration or "")
+    if not match:
+        return 0
+    days, hours, minutes, seconds = (int(g or 0) for g in match.groups())
+    return ((days * 24 + hours) * 60 + minutes) * 60 + seconds
 
 
 class ChannelOverview(TypedDict):

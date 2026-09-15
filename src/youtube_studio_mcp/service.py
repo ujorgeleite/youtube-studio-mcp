@@ -10,9 +10,18 @@ from .config import (
     ANALYTICS_STABLE_TTL,
     RECENT_WINDOW_DAYS,
     RETENTION_TTL,
+    SHORT_MAX_SECONDS,
     VIDEO_LIST_TTL,
 )
-from .youtube import ChannelOverview
+from .youtube import ChannelOverview, duration_seconds
+
+EFFICIENCY_CRITERIA = ("averageViewPercentage", "subscribersGained", "comments", "likes")
+_CRITERIA_LABELS = {
+    "averageViewPercentage": "retencao",
+    "subscribersGained": "inscritos",
+    "comments": "comentarios",
+    "likes": "likes",
+}
 
 CHANNEL_OVERVIEW_KEY = "channel_overview:mine"
 
@@ -65,6 +74,16 @@ class AnalyticsService:
     ) -> dict:
         key = f"video_metrics:{video_id}:{start_date}:{end_date}"
         return self._raw_metrics(key, start_date, end_date, refresh, video_id=video_id)
+
+    def get_video_efficiency(
+        self, video_id: str, start_date: str, end_date: str, refresh: bool = False
+    ) -> dict:
+        key = f"video_efficiency:{video_id}:{start_date}:{end_date}"
+        raw = None if refresh else self._cache.get(key, self._ttl_for(end_date))
+        if raw is None:
+            raw = self._client.fetch_video_efficiency(video_id, start_date, end_date)
+            self._cache.set(key, raw)
+        return raw
 
     def get_retention_curve(self, video_id: str, refresh: bool = False) -> dict:
         key = f"retention:{video_id}"
@@ -162,9 +181,69 @@ class PillarService:
         }
 
 
+class VideoEfficiencyService:
+    """Rank videos by an efficiency score inside each format (longos vs shorts).
+
+    Every raw criterion (retention, subscribers, comments, likes) is kept per video so
+    a downstream library can re-score or weight them for its own decisions. The score
+    here is a transparent min-max mean, only to give a default ordering."""
+
+    def __init__(
+        self,
+        list_videos: Callable[[], list[dict]],
+        video_efficiency: Callable[[str, str, str], dict],
+        default_range: Callable[[], tuple[str, str]],
+        short_max_seconds: int = SHORT_MAX_SECONDS,
+    ):
+        self._list_videos = list_videos
+        self._video_efficiency = video_efficiency
+        self._default_range = default_range
+        self._short_max = short_max_seconds
+
+    def rank(self, start_date: str | None = None, end_date: str | None = None) -> dict:
+        if not start_date or not end_date:
+            start_date, end_date = self._default_range()
+
+        rows = {"longos": [], "shorts": []}
+        for video in self._list_videos():
+            seconds = duration_seconds(video.get("duration", ""))
+            categoria = "shorts" if 0 < seconds <= self._short_max else "longos"
+            metrics = self._video_efficiency(video["id"], start_date, end_date)
+            rows[categoria].append(
+                {
+                    "id": video["id"],
+                    "title": video.get("title", ""),
+                    "duracao_segundos": seconds,
+                    "categoria": categoria,
+                    "metrics": metrics,
+                }
+            )
+
+        return {
+            "periodo": {"inicio": start_date, "fim": end_date},
+            "criterios": [_CRITERIA_LABELS[c] for c in EFFICIENCY_CRITERIA],
+            "categorias": {name: _score_and_rank(items) for name, items in rows.items()},
+        }
+
+
+def _score_and_rank(items: list[dict]) -> dict:
+    bounds = {c: (min((i["metrics"][c] for i in items), default=0), max((i["metrics"][c] for i in items), default=0)) for c in EFFICIENCY_CRITERIA}
+    for item in items:
+        normalized = {}
+        for criterion in EFFICIENCY_CRITERIA:
+            low, high = bounds[criterion]
+            value = item["metrics"][criterion]
+            normalized[_CRITERIA_LABELS[criterion]] = (value - low) / (high - low) if high > low else 0.0
+        item["criterios_normalizados"] = normalized
+        item["score_eficiencia"] = round(sum(normalized.values()) / len(normalized), 4)
+    items.sort(key=lambda i: (i["score_eficiencia"], i["metrics"]["views"]), reverse=True)
+    return {"total": len(items), "videos": items}
+
+
 @dataclass
 class Services:
     channel: ChannelService
     analytics: AnalyticsService
     library: VideoLibraryService
     pillar: PillarService
+    efficiency: VideoEfficiencyService

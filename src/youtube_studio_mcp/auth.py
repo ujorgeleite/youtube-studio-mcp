@@ -11,9 +11,17 @@ class NotAuthenticatedError(RuntimeError):
     pass
 
 
+RECONSENT_MESSAGE = (
+    "Saved token is missing required scopes (YouTube Analytics). Phase 1 needs a "
+    "new consent for the added scope — run: youtube-studio-mcp auth"
+)
+
+
 def login(settings: Settings) -> Credentials:
-    """Run the browser OAuth flow and persist the token. Never call this from the
-    stdio server: the flow prints to stdout and would corrupt the MCP protocol."""
+    """Run the browser OAuth flow and persist a fresh token for the full SCOPES set.
+    Never call this from the stdio server: the flow prints to stdout and would
+    corrupt the MCP protocol. Adding a scope cannot widen an existing token, so
+    re-running this is how the Analytics scope gets granted."""
     if not settings.client_secret_file.exists():
         raise FileNotFoundError(f"OAuth client secret not found: {settings.client_secret_file}")
     flow = InstalledAppFlow.from_client_secrets_file(str(settings.client_secret_file), SCOPES)
@@ -23,10 +31,14 @@ def login(settings: Settings) -> Credentials:
 
 
 def load_credentials(settings: Settings) -> Credentials:
-    """Load the saved token, refreshing it if expired. Never opens a browser."""
+    """Load the saved token, refreshing it if expired. Never opens a browser. Loads
+    without a forced scope list so `creds.scopes` reflects what was actually granted;
+    a token missing the Analytics scope fails the check and must be re-consented."""
     if not settings.token_file.exists():
         raise NotAuthenticatedError("Not authenticated. Run: youtube-studio-mcp auth")
-    creds = Credentials.from_authorized_user_file(str(settings.token_file), SCOPES)
+    creds = Credentials.from_authorized_user_file(str(settings.token_file))
+    if not creds.has_scopes(SCOPES):
+        raise NotAuthenticatedError(RECONSENT_MESSAGE)
     if creds.valid:
         return creds
     if creds.expired and creds.refresh_token:

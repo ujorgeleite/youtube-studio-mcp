@@ -9,7 +9,7 @@ from googleapiclient.errors import HttpError
 
 from . import auth
 from .config import Settings
-from .service import ChannelService
+from .service import Services
 
 EXPECTED_ERRORS = (auth.NotAuthenticatedError, LookupError, FileNotFoundError, HttpError)
 
@@ -30,20 +30,45 @@ def build_parser() -> tuple[argparse.ArgumentParser, dict[str, argparse.Argument
     add("serve", "run the MCP server over stdio")
     add("shell", "interactive menu with Tab completion")
     add("auth", "log in with Google (opens the browser)")
+
     overview = add("overview", "channel subscribers, total views, video count, uploads playlist")
     overview.add_argument("--refresh", action="store_true", help="bypass the local cache")
+
+    metrics = add("metrics", "channel Analytics metrics for a date range (default last 28 days)")
+    metrics.add_argument("--start", help="start date YYYY-MM-DD")
+    metrics.add_argument("--end", help="end date YYYY-MM-DD")
+    metrics.add_argument("--refresh", action="store_true", help="bypass the local cache")
+
+    videos = add("videos", "list every uploaded video (id, title, date, duration)")
+    videos.add_argument("--refresh", action="store_true", help="bypass the local cache")
+
+    retention = add("retention", "audience retention curve for one video")
+    retention.add_argument("video_id", help="the YouTube video id")
+    retention.add_argument("--refresh", action="store_true", help="bypass the local cache")
+
+    pillars = add("pillars", "watch time and retention grouped and ranked by content pillar")
+    pillars.add_argument("--start", help="start date YYYY-MM-DD")
+    pillars.add_argument("--end", help="end date YYYY-MM-DD")
 
     return parser, commands
 
 
-def run_command(args: argparse.Namespace, settings: Settings, get_service: Callable[[], ChannelService]) -> int:
+def run_command(args: argparse.Namespace, settings: Settings, get_services: Callable[[], Services]) -> int:
     """Run a non-server command. Returns the process exit code."""
     try:
         if args.command == "auth":
             auth.login(settings)
             print(f"Authenticated. Token saved to {settings.token_file}")
         elif args.command == "overview":
-            _print_json(get_service().get_channel_overview(refresh=args.refresh))
+            _print_json(get_services().channel.get_channel_overview(refresh=args.refresh))
+        elif args.command == "metrics":
+            _print_json(get_services().analytics.get_channel_metrics(args.start, args.end, args.refresh))
+        elif args.command == "videos":
+            _print_json(get_services().library.list_videos(refresh=args.refresh))
+        elif args.command == "retention":
+            _print_json(get_services().analytics.get_retention_curve(args.video_id, refresh=args.refresh))
+        elif args.command == "pillars":
+            _print_json(get_services().pillar.analyze(args.start, args.end))
     except EXPECTED_ERRORS as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

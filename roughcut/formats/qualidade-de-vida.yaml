@@ -1,0 +1,36 @@
+# Formato "qualidade de vida" — definição de beats (parâmetro do passo 2).
+# Cada beat tem um `tipo`:
+#   a_roll        — fala do apresentador na câmera
+#   broll_narrado — narração por cima de imagens de apoio
+#   broll_mudo    — imagem de apoio sem fala (slot de B-roll no stringout)
+#   fixo          — elemento fixo/recorrente (ex: CTA)
+
+nome: qualidade-de-vida
+duracao_max_s: 720
+
+beats:
+  - id: cold_open
+    tipo: broll_narrado
+    duracao_s: 30
+    descricao: gancho narrado por cima de imagens; segura o espectador nos 30s iniciais
+  - id: entrada
+    tipo: a_roll
+    descricao: apresentador entra em cena e apresenta o tema
+  - id: cta
+    tipo: fixo
+    descricao: chamada para inscrição/like, curta e recorrente
+  - id: continuacao_intro
+    tipo: a_roll
+    descricao: contextualiza e prepara o desenvolvimento
+  - id: broll_slot
+    tipo: broll_mudo
+    descricao: slot de B-roll de transição
+  - id: desenvolvimento
+    tipo: a_roll
+    descricao: corpo principal do vídeo
+  - id: broll_slot
+    tipo: broll_mudo
+    descricao: segundo slot de B-roll de respiro
+  - id: encerramento
+    tipo: a_roll
+    descricao: fechamento e call final

@@ -1,0 +1,30 @@
+{
+  "roughcut": [
+    {
+      "beat": "cold_open",
+      "clips": [
+        { "clip_id": "C01", "in": "00:00:00", "out": "00:00:02" }
+      ],
+      "broll_suggestion": ""
+    },
+    {
+      "beat": "entrada",
+      "clips": [
+        { "clip_id": "C02", "in": "00:00:01", "out": "00:00:03" }
+      ],
+      "broll_suggestion": ""
+    },
+    {
+      "beat": "broll_slot",
+      "clips": [],
+      "broll_suggestion": "drone sobre a cidade ao amanhecer"
+    },
+    {
+      "beat": "encerramento",
+      "clips": [
+        { "clip_id": "C03", "in": "00:00:00", "out": "00:00:02" }
+      ],
+      "broll_suggestion": ""
+    }
+  ]
+}

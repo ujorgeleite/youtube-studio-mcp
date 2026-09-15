@@ -1,0 +1,24 @@
+# ambiente isolado do roughcut
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# modelos do Whisper baixados em cache
+models/
+*.bin
+*.pt
+
+# saídas do pipeline
+stringout.mp4
+*.cut-list.json
+
+# vídeos de teste/entrada (não commitar mídia grande)
+*.mp4
+*.mov
+*.mkv
+*.m4v
+*.webm
+*.avi
+
+.DS_Store

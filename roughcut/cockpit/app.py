@@ -19,6 +19,7 @@ sys.path.insert(0, ROOT)
 from nicegui import app, run, ui  # noqa: E402
 
 import run as pipeline  # noqa: E402
+from cockpit.filepicker import choose_directory  # noqa: E402
 from cockpit.runs import RUNS_DIR, list_runs, read_events, zip_run  # noqa: E402
 from steps.run_record import RunRecord  # noqa: E402
 
@@ -79,7 +80,19 @@ def cockpit() -> None:
                 value="dry",
                 label="Modo",
             ).classes("w-full")
-            input_dir = ui.input("Pasta de clipes", placeholder="vazio no dry-run = clipes de demo").classes("w-full")
+            with ui.row().classes("w-full items-end no-wrap gap-1"):
+                input_dir = ui.input(
+                    "Pasta de clipes", placeholder="vazio no dry-run = clipes de demo"
+                ).classes("flex-grow")
+
+                async def _browse() -> None:
+                    chosen = await run.io_bound(choose_directory)
+                    if chosen:
+                        input_dir.value = chosen
+
+                ui.button(icon="folder_open", on_click=_browse).props("flat dense").tooltip(
+                    "Procurar pasta no sistema…"
+                )
             fmt = ui.select(pipeline.list_formats() or ["qualidade-de-vida"], label="Formato").classes("w-full")
             fmt.value = fmt.options[0] if fmt.options else None
             model = ui.select(MODEL_SIZES, value="base", label="Modelo Whisper").classes("w-full")

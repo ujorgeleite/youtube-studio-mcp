@@ -23,11 +23,13 @@ sys.path.insert(0, HERE)
 
 from steps.assemble import assemble, load_cut_list  # noqa: E402
 from steps.order import order  # noqa: E402
+from steps.run_record import RunRecord  # noqa: E402
 from steps.transcribe import list_clips, transcribe_folder  # noqa: E402
 
 FORMATS_DIR = os.path.join(HERE, "formats")
 PROMPT_PATH = os.path.join(HERE, "prompts", "ordenacao.md")
 FIXTURE_CUT_LIST = os.path.join(HERE, "tests", "fixtures", "cut_list.json")
+RUNS_DIR = os.path.join(HERE, "runs")
 
 
 def _format_path(name: str) -> str:
@@ -57,40 +59,91 @@ def _print_critica(cut_list: dict) -> None:
         print(f"duracao_estimada_s: {critica['duracao_estimada_s']}")
 
 
+def _save_cut_list_artifacts(record: RunRecord, cut_list: dict) -> None:
+    record.artifact("cut_list", cut_list, filename="cut-list.json")
+    if cut_list.get("critica"):
+        record.artifact("critica", cut_list["critica"], filename="critica.json")
+
+
 def _run_dry(args) -> str:
-    cut_list = load_cut_list(args.cut_list) if args.cut_list else load_cut_list(
-        FIXTURE_CUT_LIST
+    source = args.cut_list or FIXTURE_CUT_LIST
+    record = RunRecord.create(
+        RUNS_DIR,
+        {"mode": "dry", "cut_list": source, "input": args.input, "output": args.output},
     )
-    if args.input:
-        clip_map = list_clips(args.input)
-    else:
-        from tests.fixtures.make_clips import make_clips
+    try:
+        cut_list = load_cut_list(source)
+        _save_cut_list_artifacts(record, cut_list)
 
-        demo_dir = tempfile.mkdtemp(prefix="roughcut_demo_clips_")
-        clip_map = make_clips(demo_dir)
-        print(f"[dry-run] usando clipes de demonstração em {demo_dir}")
+        if args.input:
+            clip_map = list_clips(args.input)
+        else:
+            from tests.fixtures.make_clips import make_clips
 
-    assemble(cut_list, clip_map, args.output)
+            demo_dir = tempfile.mkdtemp(prefix="roughcut_demo_clips_")
+            clip_map = make_clips(demo_dir)
+            print(f"[dry-run] usando clipes de demonstração em {demo_dir}")
+        record.event("assemble", "clips_resolved", count=len(clip_map), clip_ids=list(clip_map))
+
+        with record.step("assemble", output=args.output):
+            assemble(cut_list, clip_map, args.output)
+        record.note_output("stringout", args.output)
+    except Exception as exc:
+        record.finalize("error", error=str(exc))
+        print(f"  run: {record.dir}")
+        raise
+    record.finalize("ok")
     _print_critica(cut_list)
+    print(f"  run: {record.dir}")
     return args.output
 
 
 def _run_full(args) -> str:
     format_path = _format_path(args.format)
-    print(f"[1/3] transcrevendo clipes de {args.input} ...")
-    transcripts, clip_map = transcribe_folder(args.input, model_size=args.model_size)
+    record = RunRecord.create(
+        RUNS_DIR,
+        {
+            "mode": "full",
+            "format": args.format,
+            "model_size": args.model_size,
+            "input": args.input,
+            "output": args.output,
+        },
+    )
+    try:
+        print(f"[1/3] transcrevendo clipes de {args.input} ...")
+        with record.step("transcribe", input=args.input, model_size=args.model_size):
+            transcripts, clip_map = transcribe_folder(args.input, model_size=args.model_size)
+        record.artifact("transcripts", transcripts, filename="transcripts.txt")
+        record.event("transcribe", "clips_transcribed", count=len(clip_map), clip_ids=list(clip_map))
 
-    print("[2/3] ordenando (LLM) ...")
-    cut_list = order(transcripts, format_path, PROMPT_PATH)
+        print("[2/3] ordenando (LLM) ...")
+        with record.step("order", format=format_path):
+            cut_list = order(
+                transcripts,
+                format_path,
+                PROMPT_PATH,
+                on_prompt=lambda prompt: record.artifact("prompt", prompt, filename="prompt.md"),
+                on_raw=lambda raw: record.artifact("llm_response", raw, filename="llm_response.txt"),
+            )
+        _save_cut_list_artifacts(record, cut_list)
 
-    cut_list_path = os.path.splitext(args.output)[0] + ".cut-list.json"
-    with open(cut_list_path, "w", encoding="utf-8") as fh:
-        json.dump(cut_list, fh, ensure_ascii=False, indent=2)
-    print(f"      cut-list salva em {cut_list_path}")
+        cut_list_path = os.path.splitext(args.output)[0] + ".cut-list.json"
+        with open(cut_list_path, "w", encoding="utf-8") as fh:
+            json.dump(cut_list, fh, ensure_ascii=False, indent=2)
+        print(f"      cut-list salva em {cut_list_path}")
 
-    print("[3/3] montando o stringout (ffmpeg) ...")
-    assemble(cut_list, clip_map, args.output)
+        print("[3/3] montando o stringout (ffmpeg) ...")
+        with record.step("assemble", output=args.output):
+            assemble(cut_list, clip_map, args.output)
+        record.note_output("stringout", args.output)
+    except Exception as exc:
+        record.finalize("error", error=str(exc))
+        print(f"  run: {record.dir}")
+        raise
+    record.finalize("ok")
     _print_critica(cut_list)
+    print(f"  run: {record.dir}")
     return args.output
 
 

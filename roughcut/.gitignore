@@ -13,6 +13,9 @@ models/
 stringout.mp4
 *.cut-list.json
 
+# registros de execução (logs ricos por run — artefatos locais)
+runs/
+
 # vídeos de teste/entrada (não commitar mídia grande)
 *.mp4
 *.mov

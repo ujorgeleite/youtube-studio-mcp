@@ -369,12 +369,21 @@ def cockpit() -> None:
                 on_click=lambda: _finish_manual(response_box.value),
             )
 
+    def _loading(text: str) -> None:
+        spinner.set_visibility(True)
+        status.text = text
+        manual_area.clear()
+        with manual_area:
+            with ui.row().classes("items-center gap-3 p-4"):
+                ui.spinner(size="lg")
+                ui.label(text).classes("text-sm opacity-80")
+
     async def _finish_manual(raw: str) -> None:
         if not raw or not raw.strip():
             ui.notify("Cole a resposta da IA primeiro", type="warning")
             return
         record = manual_state["record"]
-        status.text = "processando resposta…"
+        _loading("Processando a resposta da IA…")
         try:
             cut_list = await run.io_bound(pipeline.record_response, record, raw)
         except Exception as exc:
@@ -384,75 +393,107 @@ def cockpit() -> None:
             return
         manual_state["cut_list"] = cut_list
         CLIP_REGISTRY[record.dir.name] = manual_state["clip_map"]
-        spinner.set_visibility(True)
-        status.text = "gerando miniaturas dos clipes…"
+        _loading("Gerando miniaturas dos clipes…")
         manual_state["thumbs"] = await run.io_bound(
             first_frames, manual_state["clip_map"], str(record.dir / "frames")
         )
-        status.text = "prévia — aprove ou reordene antes de montar"
         _show_editor()
         _refresh_runs()
 
+    async def _play_preview() -> None:
+        segments = [
+            {
+                "url": f"/clip/{manual_state['record'].dir.name}/{s['clip_id']}",
+                "inS": parse_timecode(s["in"]),
+                "outS": parse_timecode(s["out"]),
+            }
+            for s in preview.player_segments(manual_state["cut_list"])
+        ]
+        if not segments:
+            ui.notify("Nenhum trecho com clipe para tocar", type="warning")
+            return
+        await ui.run_javascript(_PLAYER_JS.replace("%SEGS%", json.dumps(segments)))
+
+    def _timeline_card(idx: int, beat: dict, run_id: str, thumbs: dict) -> None:
+        clips = beat.get("clips") or []
+        is_broll = not clips
+        with ui.card().classes("shrink-0 w-40 p-1 gap-1"):
+            with ui.row().classes("items-center gap-1 w-full"):
+                ui.label(str(idx + 1)).classes(
+                    "text-xs font-bold bg-primary text-white rounded px-1"
+                )
+                ui.label(beat.get("beat", "")).classes("text-xs font-medium truncate flex-grow")
+            thumb = thumbs.get(clips[0]["clip_id"]) if clips else None
+            if thumb:
+                ui.image(f"/runs/{run_id}/frames/{thumb}").classes("w-full rounded").style(
+                    "height:80px;object-fit:cover"
+                )
+            else:
+                with ui.element("div").classes(
+                    "w-full rounded flex items-center justify-center bg-neutral-800"
+                ).style("height:80px"):
+                    ui.label("B-ROLL").classes("text-xs opacity-70")
+            if is_broll:
+                ui.label(beat.get("broll_suggestion") or "(sem sugestão)").classes(
+                    "text-xs opacity-60 truncate"
+                )
+            else:
+                first = clips[0]
+                extra = f" +{len(clips) - 1}" if len(clips) > 1 else ""
+                ui.label(f"{first['clip_id']} {first.get('in')}–{first.get('out')}{extra}").classes(
+                    "text-xs opacity-70 truncate"
+                )
+            with ui.row().classes("justify-center gap-0 w-full"):
+                ui.button(icon="chevron_left", on_click=lambda i=idx: _move(i, -1)).props(
+                    "flat dense round size=sm"
+                )
+                ui.button(icon="chevron_right", on_click=lambda i=idx: _move(i, 1)).props(
+                    "flat dense round size=sm"
+                )
+                ui.button(icon="close", color="red", on_click=lambda i=idx: _remove(i)).props(
+                    "flat dense round size=sm"
+                )
+
     def _show_editor() -> None:
         spinner.set_visibility(False)
+        status.text = "prévia — aprove ou reordene antes de montar"
         manual_area.clear()
         cut_list = manual_state["cut_list"]
-        record = manual_state["record"]
-        run_id = record.dir.name
+        run_id = manual_state["record"].dir.name
         thumbs = manual_state.get("thumbs", {})
+        beats = cut_list.get("roughcut", [])
+        leftovers = preview.leftover_clips(cut_list, manual_state["clip_map"])
         with manual_area:
-            ui.label("Prévia (sem render final) — aprove ou reordene").classes("text-sm font-bold")
-            ui.html(
-                '<video id="rc-preview" controls playsinline '
-                'style="width:100%;max-width:640px;border-radius:8px;background:#000"></video>'
+            with ui.card().classes("w-full items-center bg-black"):
+                ui.html(
+                    '<video id="rc-preview" controls playsinline '
+                    'style="width:100%;max-width:760px;border-radius:8px;background:#000"></video>'
+                )
+                ui.button("Reproduzir prévia", icon="play_arrow", on_click=_play_preview)
+
+            ui.label(f"No vídeo — em ordem ({len(beats)} cortes)").classes("text-sm font-bold mt-3")
+            with ui.row().classes("flex-nowrap overflow-x-auto w-full gap-2 pb-2 items-stretch"):
+                for idx, beat in enumerate(beats):
+                    _timeline_card(idx, beat, run_id, thumbs)
+
+            ui.label(f"Fora do vídeo — clipes não usados ({len(leftovers)})").classes(
+                "text-sm font-bold mt-3"
             )
-
-            async def _play() -> None:
-                segments = [
-                    {
-                        "url": f"/clip/{run_id}/{s['clip_id']}",
-                        "inS": parse_timecode(s["in"]),
-                        "outS": parse_timecode(s["out"]),
-                    }
-                    for s in preview.player_segments(cut_list)
-                ]
-                if not segments:
-                    ui.notify("Nenhum trecho com clipe para tocar", type="warning")
-                    return
-                await ui.run_javascript(_PLAYER_JS.replace("%SEGS%", json.dumps(segments)))
-
-            ui.button("Reproduzir prévia", icon="play_arrow", on_click=_play).props("outline")
-
-            ui.label("Ordem dos cortes").classes("text-sm font-bold mt-2")
-            beats = cut_list.get("roughcut", [])
-            for idx, beat in enumerate(beats):
-                clips = beat.get("clips") or []
-                if clips:
-                    summary = ", ".join(f"{c['clip_id']} [{c.get('in')}–{c.get('out')}]" for c in clips)
-                else:
-                    summary = f"B-roll: {beat.get('broll_suggestion') or '(sem sugestão)'}"
-                with ui.row().classes("items-center gap-2 w-full"):
-                    ui.label(f"{idx + 1}. {beat.get('beat')}").classes("font-medium w-40")
-                    ui.label(summary).classes("text-xs opacity-70 flex-grow")
-                    ui.button(icon="arrow_upward", on_click=lambda i=idx: _move(i, -1)).props("flat dense")
-                    ui.button(icon="arrow_downward", on_click=lambda i=idx: _move(i, 1)).props("flat dense")
-                    ui.button(icon="delete", color="red", on_click=lambda i=idx: _remove(i)).props("flat dense")
-
-            leftovers = preview.leftover_clips(cut_list, manual_state["clip_map"])
-            ui.label(f"Clipes de fora ({len(leftovers)})").classes("text-sm font-bold mt-2")
             if not leftovers:
                 ui.label("todos os clipes estão no vídeo").classes("text-xs opacity-60")
-            with ui.row().classes("flex-wrap gap-2"):
+            with ui.row().classes("flex-nowrap overflow-x-auto w-full gap-2 pb-2 items-stretch"):
                 for clip_id in leftovers:
-                    with ui.column().classes("items-center gap-0"):
+                    with ui.card().classes("shrink-0 w-32 p-1 gap-1 opacity-80"):
                         if clip_id in thumbs:
-                            ui.image(f"/runs/{run_id}/frames/{thumbs[clip_id]}").classes("w-32 rounded")
-                        ui.label(clip_id).classes("text-xs opacity-70")
-                        ui.button("Inserir no fim", icon="add", on_click=lambda c=clip_id: _insert(c)).props(
-                            "flat dense"
-                        )
+                            ui.image(f"/runs/{run_id}/frames/{thumbs[clip_id]}").classes(
+                                "w-full rounded"
+                            ).style("height:64px;object-fit:cover")
+                        ui.label(clip_id).classes("text-xs opacity-70 text-center")
+                        ui.button(
+                            "Inserir", icon="add", on_click=lambda c=clip_id: _insert(c)
+                        ).props("flat dense size=sm").classes("w-full")
 
-            with ui.row().classes("mt-3 gap-2"):
+            with ui.row().classes("mt-4 gap-2"):
                 ui.button("Aprovar e montar", icon="check", color="green", on_click=_approve)
                 ui.button("Cancelar", on_click=lambda: _new_run()).props("flat")
 
@@ -471,9 +512,7 @@ def cockpit() -> None:
 
     async def _approve() -> None:
         record = manual_state["record"]
-        spinner.set_visibility(True)
-        status.text = "montando…"
-        manual_area.clear()
+        _loading("Montando o vídeo final (ffmpeg)…")
         timer = ui.timer(0.4, manual_state["tailer"].poll)
         try:
             await run.io_bound(
@@ -485,6 +524,7 @@ def cockpit() -> None:
             )
             status.text = "concluído ✓"
             last_run.update(record=record, clip_map=manual_state["clip_map"])
+            manual_area.clear()
             _show_results(record)
         except Exception as exc:
             status.text = f"erro: {exc}"

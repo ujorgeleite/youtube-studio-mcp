@@ -72,17 +72,20 @@ def list_clips(input_dir: str) -> dict[str, str]:
 
 
 def transcribe_folder(
-    input_dir: str, model_size: str = DEFAULT_MODEL_SIZE
+    input_dir: str, model_size: str = DEFAULT_MODEL_SIZE, on_clip=None
 ) -> tuple[str, dict[str, str]]:
     """Transcreve todos os clipes da pasta.
 
-    Retorna (transcripts_concatenados, clip_map).
+    `on_clip(clip_id, index, total, path)` é chamado antes de cada clipe, para a UI
+    mostrar o progresso ("clipe 2/5"). Retorna (transcripts_concatenados, clip_map).
     """
     clip_map = list_clips(input_dir)
     if not clip_map:
         raise FileNotFoundError(f"nenhum clipe de vídeo em {input_dir}")
-    blocks = [
-        transcribe_clip(path, clip_id, model_size)
-        for clip_id, path in clip_map.items()
-    ]
+    total = len(clip_map)
+    blocks = []
+    for index, (clip_id, path) in enumerate(clip_map.items(), start=1):
+        if on_clip is not None:
+            on_clip(clip_id, index, total, path)
+        blocks.append(transcribe_clip(path, clip_id, model_size))
     return "\n\n".join(blocks), clip_map

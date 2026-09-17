@@ -65,6 +65,12 @@ def _print_critica(cut_list: dict) -> None:
         print(f"duracao_estimada_s: {critica['duracao_estimada_s']}")
 
 
+def _clip_progress(record: RunRecord):
+    return lambda clip_id, index, total, path: record.event(
+        "transcribe", "clip", clip_id=clip_id, index=index, total=total, filename=os.path.basename(path)
+    )
+
+
 def _save_cut_list_artifacts(record: RunRecord, cut_list: dict) -> None:
     record.artifact("cut_list", cut_list, filename="cut-list.json")
     if cut_list.get("critica"):
@@ -150,7 +156,9 @@ def transcribe_and_prompt(
             {"mode": "manual", "format": format, "model_size": model_size, "input": input},
         )
     with record.step("transcribe", input=input, model_size=model_size):
-        transcripts, clip_map = transcribe_folder(input, model_size=model_size)
+        transcripts, clip_map = transcribe_folder(
+            input, model_size=model_size, on_clip=_clip_progress(record)
+        )
     record.artifact("transcripts", transcripts, filename="transcripts.txt")
     record.event("transcribe", "clips_transcribed", count=len(clip_map), clip_ids=list(clip_map))
 
@@ -213,7 +221,9 @@ def run_full(
     try:
         print(f"[1/3] transcrevendo clipes de {input} ...")
         with record.step("transcribe", input=input, model_size=model_size):
-            transcripts, clip_map = transcribe_folder(input, model_size=model_size)
+            transcripts, clip_map = transcribe_folder(
+                input, model_size=model_size, on_clip=_clip_progress(record)
+            )
         record.artifact("transcripts", transcripts, filename="transcripts.txt")
         record.event("transcribe", "clips_transcribed", count=len(clip_map), clip_ids=list(clip_map))
 

@@ -20,7 +20,10 @@ def test_transcribe_and_prompt_builds_prompt_without_llm(tmp_path, monkeypatch):
     monkeypatch.setattr(
         pipeline,
         "transcribe_folder",
-        lambda input, model_size: ("[C01] arquivo=a.mp4\n00:00:00–00:00:05 oi", {"C01": "/a.mp4"}),
+        lambda input, model_size, on_clip=None: (
+            "[C01] arquivo=a.mp4\n00:00:00–00:00:05 oi",
+            {"C01": "/a.mp4"},
+        ),
     )
     record = _record(tmp_path, mode="manual", format="qualidade-de-vida")
 

@@ -106,7 +106,7 @@ class Timeline:
 
 @ui.page("/")
 def cockpit() -> None:
-    ui.query("body").style("background-color: #0e1117")
+    ui.dark_mode().enable()
     manual_state: dict = {}
     last_run: dict = {}
 

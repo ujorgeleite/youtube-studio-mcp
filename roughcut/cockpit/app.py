@@ -21,7 +21,14 @@ from nicegui import app, run, ui  # noqa: E402
 
 import run as pipeline  # noqa: E402
 from cockpit.filepicker import choose_directory  # noqa: E402
-from cockpit.runs import RUNS_DIR, list_runs, read_events, zip_run  # noqa: E402
+from cockpit.runs import (  # noqa: E402
+    RUNS_DIR,
+    delete_run,
+    human_size,
+    list_runs,
+    read_events,
+    zip_run,
+)
 from steps.frames import cold_open_frames, grid_frames  # noqa: E402
 from steps.run_record import RunRecord  # noqa: E402
 
@@ -293,10 +300,15 @@ def cockpit() -> None:
             if not cold and not grid:
                 ui.label("nenhum frame extraído").classes("text-sm opacity-60")
 
-    def _show_manual(prompt: str) -> None:
+    def _show_manual(prompt: str, raw: str = "", error: str | None = None) -> None:
         spinner.set_visibility(False)
         manual_area.clear()
         with manual_area:
+            if error:
+                ui.label(f"Falha ao processar a resposta: {error}").classes(
+                    "text-sm text-red-400 font-medium"
+                )
+                ui.label("Corrija o JSON abaixo e tente de novo.").classes("text-xs opacity-70")
             ui.label("1) Copie este prompt e rode na IA de sua preferência").classes("text-sm font-bold")
             ui.textarea(value=prompt).props("readonly outlined").classes("w-full h-40 font-mono text-xs")
 
@@ -309,9 +321,9 @@ def cockpit() -> None:
 
             ui.button("Copiar prompt", icon="content_copy", on_click=_copy).props("outline")
             ui.label("2) Cole aqui a resposta da IA (o JSON da cut-list)").classes("text-sm font-bold")
-            response_box = ui.textarea(placeholder='{ "roughcut": [ ... ] }').props("outlined").classes(
-                "w-full h-40 font-mono text-xs"
-            )
+            response_box = ui.textarea(value=raw, placeholder='{ "roughcut": [ ... ] }').props(
+                "outlined"
+            ).classes("w-full h-40 font-mono text-xs")
             ui.button(
                 "Montar stringout com esta resposta",
                 icon="build",
@@ -339,10 +351,9 @@ def cockpit() -> None:
             last_run.update(record=record, clip_map=manual_state["clip_map"])
             _show_results(record)
         except Exception as exc:
-            spinner.set_visibility(False)
-            status.text = f"erro: {exc}"
-            new_run_button.set_visibility(True)
+            status.text = "erro na resposta — corrija e tente de novo"
             ui.notify(f"Falha ao montar: {exc}", type="negative", multi_line=True)
+            _show_manual(manual_state["prompt"], raw=raw, error=str(exc))
         finally:
             timer.deactivate()
             manual_state["tailer"].poll()
@@ -381,7 +392,9 @@ def cockpit() -> None:
                     model_size=model.value,
                     record=record,
                 )
-                manual_state.update(record=record, clip_map=clip_map, output=output, tailer=tailer)
+                manual_state.update(
+                    record=record, clip_map=clip_map, output=output, tailer=tailer, prompt=prompt
+                )
                 status.text = "prompt pronto — copie, rode na sua IA e cole a resposta"
                 _show_manual(prompt)
             else:
@@ -408,6 +421,24 @@ def cockpit() -> None:
 
     run_button.on_click(_start_run)
 
+    async def _confirm_delete(run_dir: str) -> None:
+        with ui.dialog() as dialog, ui.card():
+            ui.label("Excluir os arquivos gerados deste run?").classes("font-medium")
+            ui.label(
+                "Apaga só o bundle em runs/ (vídeo, logs, frames, zip). A pasta de "
+                "clipes de origem não é tocada."
+            ).classes("text-xs opacity-70")
+            with ui.row().classes("justify-end w-full"):
+                ui.button("Cancelar", on_click=lambda: dialog.submit("cancel")).props("flat")
+                ui.button("Excluir", color="red", on_click=lambda: dialog.submit("delete"))
+        if await dialog == "delete":
+            try:
+                delete_run(run_dir)
+                ui.notify("Run excluído", type="positive")
+            except Exception as exc:
+                ui.notify(f"Falha ao excluir: {exc}", type="negative")
+            _refresh_runs()
+
     def _refresh_runs() -> None:
         runs_panel.clear()
         runs = list_runs()
@@ -415,23 +446,32 @@ def cockpit() -> None:
             if not runs:
                 ui.label("nenhum run ainda").classes("text-sm opacity-60")
                 return
+            total = human_size(sum(r["size_bytes"] for r in runs))
+            ui.label(f"{len(runs)} run(s) · {total} em disco").classes("text-xs opacity-60")
             for entry in runs:
                 manifest = entry["manifest"] or {}
                 icon = "check_circle" if entry["status"] == "ok" else (
                     "error" if entry["status"] == "error" else "help"
                 )
-                with ui.expansion(entry["run_id"], icon=icon).classes("w-full"):
+                title = f"{entry['run_id']}  ·  {human_size(entry['size_bytes'])}"
+                with ui.expansion(title, icon=icon).classes("w-full"):
                     ui.label(
                         f"status={entry['status']}  duração={manifest.get('duration_ms')} ms  "
                         f"passos={[s['step'] for s in manifest.get('steps', [])]}"
                     ).classes("text-xs opacity-70")
                     events = read_events(entry["dir"])
                     ui.code("\n".join(_format_event(e) for e in events) or "(sem eventos)").classes("w-full")
-                    ui.button(
-                        "Baixar bundle (zip)",
-                        icon="download",
-                        on_click=lambda d=entry["dir"]: ui.download(str(zip_run(d))),
-                    ).props("flat")
+                    with ui.row():
+                        ui.button(
+                            "Baixar bundle (zip)",
+                            icon="download",
+                            on_click=lambda d=entry["dir"]: ui.download(str(zip_run(d))),
+                        ).props("flat")
+
+                        async def _del(d=entry["dir"]) -> None:
+                            await _confirm_delete(d)
+
+                        ui.button("Excluir arquivos", icon="delete", color="red", on_click=_del).props("flat")
 
     _refresh_runs()
 

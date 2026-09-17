@@ -37,6 +37,10 @@ def _probe_duration(src: str) -> float:
         return 0.0
 
 
+def clip_duration(src: str) -> float:
+    return _probe_duration(src)
+
+
 def _timestamps(duration: float, every: float, limit: int) -> list[float]:
     if duration <= 0:
         return [0.0]
@@ -76,6 +80,21 @@ def grid_frames(
             extract_frame(src, at, str(out / name))
             frames.append({"clip_id": clip_id, "at_s": at, "path": name, "kind": "grid"})
     return frames
+
+
+def first_frames(clip_map: dict[str, str], out_dir: str, at_seconds: float = 0.5) -> dict[str, str]:
+    """Uma thumbnail por clipe (para a lista de clipes de fora). {clip_id: filename}."""
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    thumbs = {}
+    for clip_id, src in clip_map.items():
+        name = f"clip_{clip_id}.jpg"
+        try:
+            extract_frame(src, at_seconds, str(out / name))
+            thumbs[clip_id] = name
+        except FramesError:
+            continue
+    return thumbs
 
 
 def cold_open_frames(cut_list: dict, clip_map: dict[str, str], out_dir: str) -> list[dict]:

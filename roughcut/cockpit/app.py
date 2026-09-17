@@ -17,9 +17,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
+from fastapi import HTTPException  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
 from nicegui import app, run, ui  # noqa: E402
 
 import run as pipeline  # noqa: E402
+from cockpit import preview  # noqa: E402
 from cockpit.filepicker import choose_directory  # noqa: E402
 from cockpit.runs import (  # noqa: E402
     RUNS_DIR,
@@ -29,7 +32,8 @@ from cockpit.runs import (  # noqa: E402
     read_events,
     zip_run,
 )
-from steps.frames import cold_open_frames, grid_frames  # noqa: E402
+from steps.assemble import parse_timecode  # noqa: E402
+from steps.frames import clip_duration, cold_open_frames, first_frames, grid_frames  # noqa: E402
 from steps.run_record import RunRecord  # noqa: E402
 
 MODEL_SIZES = ["tiny", "base", "small", "medium", "large-v3"]
@@ -43,6 +47,41 @@ MARK_PENDING, MARK_ACTIVE, MARK_DONE, MARK_ERROR, MARK_WAIT = "⚪", "⏳", "✅
 
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
 app.add_media_files("/runs", str(RUNS_DIR))
+
+CLIP_REGISTRY: dict[str, dict[str, str]] = {}
+
+# Player da prévia: toca os trechos direto dos clipes de origem (%SEGS% é injetado),
+# pulando de segmento em segmento sem renderizar nada — é só pré-visualização.
+_PLAYER_JS = """
+(() => {
+  const v = document.getElementById('rc-preview');
+  if (!v) return;
+  const segs = %SEGS%;
+  let i = 0;
+  function load(k){ const s = segs[k]; if(!s) return;
+    if (v.dataset.src !== s.url){ v.dataset.src = s.url; v.src = s.url; v.load(); }
+    else { v.currentTime = s.inS; v.play(); } }
+  v.onloadedmetadata = () => { const s = segs[i]; if (s){ v.currentTime = s.inS; v.play(); } };
+  v.ontimeupdate = () => { const s = segs[i];
+    if (s && v.currentTime >= s.outS){ i++; if (i < segs.length) load(i); else v.pause(); } };
+  i = 0; if (segs.length) load(0);
+})();
+"""
+
+
+@app.get("/clip/{run_id}/{clip_id}")
+def _serve_clip(run_id: str, clip_id: str):
+    path = CLIP_REGISTRY.get(run_id, {}).get(clip_id)
+    if not path or not os.path.isfile(path):
+        raise HTTPException(status_code=404)
+    return FileResponse(path)
+
+
+def _tc(seconds: float) -> str:
+    seconds = max(0, int(round(seconds)))
+    hours, rem = divmod(seconds, 3600)
+    minutes, secs = divmod(rem, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
 def _short(value: object, limit: int = 80) -> str:
@@ -335,14 +374,111 @@ def cockpit() -> None:
             ui.notify("Cole a resposta da IA primeiro", type="warning")
             return
         record = manual_state["record"]
+        status.text = "processando resposta…"
+        try:
+            cut_list = await run.io_bound(pipeline.record_response, record, raw)
+        except Exception as exc:
+            ui.notify(f"JSON inválido: {exc}", type="negative", multi_line=True)
+            _show_manual(manual_state["prompt"], raw=raw, error=str(exc))
+            _refresh_runs()
+            return
+        manual_state["cut_list"] = cut_list
+        CLIP_REGISTRY[record.dir.name] = manual_state["clip_map"]
+        spinner.set_visibility(True)
+        status.text = "gerando miniaturas dos clipes…"
+        manual_state["thumbs"] = await run.io_bound(
+            first_frames, manual_state["clip_map"], str(record.dir / "frames")
+        )
+        status.text = "prévia — aprove ou reordene antes de montar"
+        _show_editor()
+        _refresh_runs()
+
+    def _show_editor() -> None:
+        spinner.set_visibility(False)
+        manual_area.clear()
+        cut_list = manual_state["cut_list"]
+        record = manual_state["record"]
+        run_id = record.dir.name
+        thumbs = manual_state.get("thumbs", {})
+        with manual_area:
+            ui.label("Prévia (sem render final) — aprove ou reordene").classes("text-sm font-bold")
+            ui.html(
+                '<video id="rc-preview" controls playsinline '
+                'style="width:100%;max-width:640px;border-radius:8px;background:#000"></video>'
+            )
+
+            async def _play() -> None:
+                segments = [
+                    {
+                        "url": f"/clip/{run_id}/{s['clip_id']}",
+                        "inS": parse_timecode(s["in"]),
+                        "outS": parse_timecode(s["out"]),
+                    }
+                    for s in preview.player_segments(cut_list)
+                ]
+                if not segments:
+                    ui.notify("Nenhum trecho com clipe para tocar", type="warning")
+                    return
+                await ui.run_javascript(_PLAYER_JS.replace("%SEGS%", json.dumps(segments)))
+
+            ui.button("Reproduzir prévia", icon="play_arrow", on_click=_play).props("outline")
+
+            ui.label("Ordem dos cortes").classes("text-sm font-bold mt-2")
+            beats = cut_list.get("roughcut", [])
+            for idx, beat in enumerate(beats):
+                clips = beat.get("clips") or []
+                if clips:
+                    summary = ", ".join(f"{c['clip_id']} [{c.get('in')}–{c.get('out')}]" for c in clips)
+                else:
+                    summary = f"B-roll: {beat.get('broll_suggestion') or '(sem sugestão)'}"
+                with ui.row().classes("items-center gap-2 w-full"):
+                    ui.label(f"{idx + 1}. {beat.get('beat')}").classes("font-medium w-40")
+                    ui.label(summary).classes("text-xs opacity-70 flex-grow")
+                    ui.button(icon="arrow_upward", on_click=lambda i=idx: _move(i, -1)).props("flat dense")
+                    ui.button(icon="arrow_downward", on_click=lambda i=idx: _move(i, 1)).props("flat dense")
+                    ui.button(icon="delete", color="red", on_click=lambda i=idx: _remove(i)).props("flat dense")
+
+            leftovers = preview.leftover_clips(cut_list, manual_state["clip_map"])
+            ui.label(f"Clipes de fora ({len(leftovers)})").classes("text-sm font-bold mt-2")
+            if not leftovers:
+                ui.label("todos os clipes estão no vídeo").classes("text-xs opacity-60")
+            with ui.row().classes("flex-wrap gap-2"):
+                for clip_id in leftovers:
+                    with ui.column().classes("items-center gap-0"):
+                        if clip_id in thumbs:
+                            ui.image(f"/runs/{run_id}/frames/{thumbs[clip_id]}").classes("w-32 rounded")
+                        ui.label(clip_id).classes("text-xs opacity-70")
+                        ui.button("Inserir no fim", icon="add", on_click=lambda c=clip_id: _insert(c)).props(
+                            "flat dense"
+                        )
+
+            with ui.row().classes("mt-3 gap-2"):
+                ui.button("Aprovar e montar", icon="check", color="green", on_click=_approve)
+                ui.button("Cancelar", on_click=lambda: _new_run()).props("flat")
+
+    def _move(index: int, delta: int) -> None:
+        preview.move_beat(manual_state["cut_list"], index, delta)
+        _show_editor()
+
+    def _remove(index: int) -> None:
+        preview.remove_beat(manual_state["cut_list"], index)
+        _show_editor()
+
+    async def _insert(clip_id: str) -> None:
+        duration = await run.io_bound(clip_duration, manual_state["clip_map"][clip_id])
+        preview.insert_clip(manual_state["cut_list"], clip_id, "00:00:00", _tc(duration))
+        _show_editor()
+
+    async def _approve() -> None:
+        record = manual_state["record"]
         spinner.set_visibility(True)
         status.text = "montando…"
         manual_area.clear()
         timer = ui.timer(0.4, manual_state["tailer"].poll)
         try:
             await run.io_bound(
-                pipeline.assemble_from_raw,
-                raw=raw,
+                pipeline.assemble_approved,
+                cut_list=manual_state["cut_list"],
                 clip_map=manual_state["clip_map"],
                 output=manual_state["output"],
                 record=record,
@@ -351,9 +487,9 @@ def cockpit() -> None:
             last_run.update(record=record, clip_map=manual_state["clip_map"])
             _show_results(record)
         except Exception as exc:
-            status.text = "erro na resposta — corrija e tente de novo"
+            status.text = f"erro: {exc}"
             ui.notify(f"Falha ao montar: {exc}", type="negative", multi_line=True)
-            _show_manual(manual_state["prompt"], raw=raw, error=str(exc))
+            _show_editor()
         finally:
             timer.deactivate()
             manual_state["tailer"].poll()

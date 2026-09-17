@@ -68,7 +68,12 @@ make cockpit          # abre em http://localhost:8080
 
 Modo **dry-run** sem pasta de clipes usa os clipes de demonstração — dá para ver a
 UI e um run completo sem LLM, Whisper ou mídia. O modo **completo** exige
-`ANTHROPIC_API_KEY` e uma pasta de clipes.
+`ANTHROPIC_API_KEY` e uma pasta de clipes. O modo **manual** transcreve localmente,
+mostra o prompt para você rodar na IA de sua preferência e colar a resposta.
+
+No modo manual, antes do render final há uma **prévia editável**: um player toca os
+trechos direto dos clipes de origem (sem renderizar), você reordena/remove cortes e
+insere clipes que ficaram de fora — e só então **aprova e monta** o stringout.
 
 ## Runs (logs ricos para IA)
 

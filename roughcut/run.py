@@ -168,19 +168,28 @@ def transcribe_and_prompt(
     return prompt, clip_map
 
 
-def assemble_from_raw(
+def record_response(record: RunRecord, raw: str) -> dict:
+    """Fase manual B1: guarda a resposta crua da IA e faz parse da cut-list.
+
+    Não monta nada — o usuário revisa/reordena a prévia antes de aprovar.
+    """
+    record.artifact("llm_response", raw, filename="llm_response.txt")
+    record.event("order", "response_received", chars=len(raw), source="manual")
+    cut_list = parse_cut_list(raw)
+    _save_cut_list_artifacts(record, cut_list)
+    return cut_list
+
+
+def assemble_approved(
     *,
-    raw: str,
+    cut_list: dict,
     clip_map: dict[str, str],
     output: str,
     record: RunRecord,
 ) -> dict:
-    """Fase manual B: recebe a resposta crua da IA escolhida e monta o stringout."""
-    record.artifact("llm_response", raw, filename="llm_response.txt")
-    record.event("order", "response_received", chars=len(raw), source="manual")
+    """Fase manual B2: monta o stringout a partir da cut-list aprovada (talvez editada)."""
+    _save_cut_list_artifacts(record, cut_list)
     try:
-        cut_list = parse_cut_list(raw)
-        _save_cut_list_artifacts(record, cut_list)
         with record.step("assemble", output=output):
             assemble(cut_list, clip_map, output)
         record.note_output("stringout", output)
@@ -192,6 +201,23 @@ def assemble_from_raw(
     _print_critica(cut_list)
     print(f"  run: {record.dir}")
     return cut_list
+
+
+def assemble_from_raw(
+    *,
+    raw: str,
+    clip_map: dict[str, str],
+    output: str,
+    record: RunRecord,
+) -> dict:
+    """Fase manual B em um passo (parse + montagem), sem revisão. Usada pela CLI/testes."""
+    try:
+        cut_list = record_response(record, raw)
+    except Exception as exc:
+        record.finalize("error", error=str(exc))
+        print(f"  run: {record.dir}")
+        raise
+    return assemble_approved(cut_list=cut_list, clip_map=clip_map, output=output, record=record)
 
 
 def run_full(

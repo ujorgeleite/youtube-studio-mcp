@@ -65,18 +65,40 @@ def _save_cut_list_artifacts(record: RunRecord, cut_list: dict) -> None:
         record.artifact("critica", cut_list["critica"], filename="critica.json")
 
 
-def _run_dry(args) -> str:
-    source = args.cut_list or FIXTURE_CUT_LIST
-    record = RunRecord.create(
-        RUNS_DIR,
-        {"mode": "dry", "cut_list": source, "input": args.input, "output": args.output},
+def list_formats() -> list[str]:
+    if not os.path.isdir(FORMATS_DIR):
+        return []
+    names = (
+        os.path.splitext(f)[0]
+        for f in os.listdir(FORMATS_DIR)
+        if f.endswith((".yaml", ".yml"))
     )
-    try:
-        cut_list = load_cut_list(source)
-        _save_cut_list_artifacts(record, cut_list)
+    return sorted(names)
 
-        if args.input:
-            clip_map = list_clips(args.input)
+
+def run_dry(
+    *,
+    output: str,
+    cut_list: str | None = None,
+    input: str | None = None,
+    record: RunRecord | None = None,
+) -> RunRecord:
+    """Assemble-only: reprocessa a partir de um cut-list pronto (ou o de fixture).
+
+    `record` já criado (ex.: pela UI, que precisa do diretório antes do run) é
+    reutilizado; caso contrário um novo é aberto.
+    """
+    source = cut_list or FIXTURE_CUT_LIST
+    if record is None:
+        record = RunRecord.create(
+            RUNS_DIR, {"mode": "dry", "cut_list": source, "input": input, "output": output}
+        )
+    try:
+        parsed = load_cut_list(source)
+        _save_cut_list_artifacts(record, parsed)
+
+        if input:
+            clip_map = list_clips(input)
         else:
             from tests.fixtures.make_clips import make_clips
 
@@ -85,35 +107,47 @@ def _run_dry(args) -> str:
             print(f"[dry-run] usando clipes de demonstração em {demo_dir}")
         record.event("assemble", "clips_resolved", count=len(clip_map), clip_ids=list(clip_map))
 
-        with record.step("assemble", output=args.output):
-            assemble(cut_list, clip_map, args.output)
-        record.note_output("stringout", args.output)
+        with record.step("assemble", output=output):
+            assemble(parsed, clip_map, output)
+        record.note_output("stringout", output)
     except Exception as exc:
         record.finalize("error", error=str(exc))
         print(f"  run: {record.dir}")
         raise
     record.finalize("ok")
-    _print_critica(cut_list)
+    _print_critica(parsed)
     print(f"  run: {record.dir}")
-    return args.output
+    return record
 
 
-def _run_full(args) -> str:
-    format_path = _format_path(args.format)
-    record = RunRecord.create(
-        RUNS_DIR,
-        {
-            "mode": "full",
-            "format": args.format,
-            "model_size": args.model_size,
-            "input": args.input,
-            "output": args.output,
-        },
-    )
+def run_full(
+    *,
+    input: str,
+    format: str = "qualidade-de-vida",
+    output: str = "stringout.mp4",
+    model_size: str = "base",
+    record: RunRecord | None = None,
+) -> RunRecord:
+    """Pipeline completo (transcribe -> order -> assemble), instrumentado.
+
+    `record` já criado é reutilizado (ver run_dry).
+    """
+    format_path = _format_path(format)
+    if record is None:
+        record = RunRecord.create(
+            RUNS_DIR,
+            {
+                "mode": "full",
+                "format": format,
+                "model_size": model_size,
+                "input": input,
+                "output": output,
+            },
+        )
     try:
-        print(f"[1/3] transcrevendo clipes de {args.input} ...")
-        with record.step("transcribe", input=args.input, model_size=args.model_size):
-            transcripts, clip_map = transcribe_folder(args.input, model_size=args.model_size)
+        print(f"[1/3] transcrevendo clipes de {input} ...")
+        with record.step("transcribe", input=input, model_size=model_size):
+            transcripts, clip_map = transcribe_folder(input, model_size=model_size)
         record.artifact("transcripts", transcripts, filename="transcripts.txt")
         record.event("transcribe", "clips_transcribed", count=len(clip_map), clip_ids=list(clip_map))
 
@@ -128,15 +162,15 @@ def _run_full(args) -> str:
             )
         _save_cut_list_artifacts(record, cut_list)
 
-        cut_list_path = os.path.splitext(args.output)[0] + ".cut-list.json"
+        cut_list_path = os.path.splitext(output)[0] + ".cut-list.json"
         with open(cut_list_path, "w", encoding="utf-8") as fh:
             json.dump(cut_list, fh, ensure_ascii=False, indent=2)
         print(f"      cut-list salva em {cut_list_path}")
 
         print("[3/3] montando o stringout (ffmpeg) ...")
-        with record.step("assemble", output=args.output):
-            assemble(cut_list, clip_map, args.output)
-        record.note_output("stringout", args.output)
+        with record.step("assemble", output=output):
+            assemble(cut_list, clip_map, output)
+        record.note_output("stringout", output)
     except Exception as exc:
         record.finalize("error", error=str(exc))
         print(f"  run: {record.dir}")
@@ -144,7 +178,7 @@ def _run_full(args) -> str:
     record.finalize("ok")
     _print_critica(cut_list)
     print(f"  run: {record.dir}")
-    return args.output
+    return record
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -174,12 +208,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     if args.dry_run:
-        out = _run_dry(args)
+        run_dry(output=args.output, cut_list=args.cut_list, input=args.input)
     else:
         if not args.input:
             raise SystemExit("--input é obrigatório (ou use --dry-run)")
-        out = _run_full(args)
-    print(f"\n✓ stringout: {out}")
+        run_full(
+            input=args.input,
+            format=args.format,
+            output=args.output,
+            model_size=args.model_size,
+        )
+    print(f"\n✓ stringout: {args.output}")
     return 0
 
 

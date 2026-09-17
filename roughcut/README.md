@@ -55,6 +55,29 @@ ou `ant auth login`).
 
 Flags: `--input`, `--format`, `--output`, `--dry-run`, `--cut-list`, `--model-size`.
 
+## Cockpit (UI)
+
+Interface de testes no navegador (NiceGUI): dispara o pipeline, transmite o
+`events.jsonl` ao vivo, mostra o stringout e navega os runs anteriores com
+download do bundle (zip) para análise por IA.
+
+```bash
+make cockpit          # abre em http://localhost:8080
+# ou: .venv/bin/python cockpit/app.py
+```
+
+Modo **dry-run** sem pasta de clipes usa os clipes de demonstração — dá para ver a
+UI e um run completo sem LLM, Whisper ou mídia. O modo **completo** exige
+`ANTHROPIC_API_KEY` e uma pasta de clipes.
+
+## Runs (logs ricos para IA)
+
+Cada execução (CLI ou cockpit) escreve um bundle autocontido em `runs/<stamp>__<slug>/`:
+`run.json` (manifesto: params, ambiente, timing por passo, artefatos, status),
+`events.jsonl` (log estruturado append-only) e os artefatos de cada passo
+(`transcripts.txt`, `prompt.md`, `llm_response.txt`, `cut-list.json`, `critica.json`).
+A pasta `runs/` é local e fica no `.gitignore`.
+
 ## O cut-list (schema)
 
 O passo 2 produz e o passo 3 consome:

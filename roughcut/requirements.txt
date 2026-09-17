@@ -1,4 +1,5 @@
 faster-whisper
 pyyaml
 anthropic
+nicegui
 pytest

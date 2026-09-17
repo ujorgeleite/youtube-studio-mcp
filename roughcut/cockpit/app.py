@@ -76,7 +76,11 @@ def cockpit() -> None:
         with ui.card().classes("w-96"):
             ui.label("Novo run").classes("text-base font-bold")
             mode = ui.select(
-                {"dry": "dry-run (assemble, sem LLM/Whisper)", "full": "completo (LLM + Whisper)"},
+                {
+                    "dry": "dry-run (assemble, sem LLM/Whisper)",
+                    "full": "completo — IA via API (ANTHROPIC_API_KEY)",
+                    "manual": "manual — copiar prompt / colar resposta",
+                },
                 value="dry",
                 label="Modo",
             ).classes("w-full")
@@ -98,19 +102,23 @@ def cockpit() -> None:
             model = ui.select(MODEL_SIZES, value="base", label="Modelo Whisper").classes("w-full")
             run_button = ui.button("Rodar pipeline", icon="play_arrow").classes("w-full")
 
-            def _toggle_full_fields() -> None:
-                is_full = mode.value == "full"
-                fmt.set_visibility(is_full)
-                model.set_visibility(is_full)
+            def _toggle_fields() -> None:
+                needs_ai = mode.value in ("full", "manual")
+                fmt.set_visibility(needs_ai)
+                model.set_visibility(needs_ai)
+                run_button.text = "Preparar prompt" if mode.value == "manual" else "Rodar pipeline"
 
-            mode.on_value_change(lambda _: _toggle_full_fields())
-            _toggle_full_fields()
+            mode.on_value_change(lambda _: _toggle_fields())
+            _toggle_fields()
 
         with ui.card().classes("flex-grow"):
             ui.label("Log ao vivo").classes("text-base font-bold")
             status = ui.label("aguardando…").classes("text-sm opacity-70")
             log = ui.log(max_lines=2000).classes("w-full h-80 bg-black text-green-300 text-xs")
+            manual_area = ui.column().classes("w-full")
             results = ui.column().classes("w-full")
+
+    manual_state: dict = {}
 
     ui.separator()
     ui.label("Runs anteriores").classes("text-base font-bold px-4")
@@ -134,14 +142,69 @@ def cockpit() -> None:
             )
             ui.label(f"bundle: {record.dir}").classes("text-xs opacity-60")
 
+    def _show_manual(prompt: str) -> None:
+        manual_area.clear()
+        with manual_area:
+            ui.label("1) Copie este prompt e rode na IA de sua preferência").classes(
+                "text-sm font-bold"
+            )
+            ui.textarea(value=prompt).props("readonly outlined").classes(
+                "w-full h-40 font-mono text-xs"
+            )
+
+            async def _copy() -> None:
+                await ui.clipboard.write(prompt)
+                ui.notify("Prompt copiado", type="positive")
+
+            ui.button("Copiar prompt", icon="content_copy", on_click=_copy).props("outline")
+
+            ui.label("2) Cole aqui a resposta da IA (o JSON da cut-list)").classes(
+                "text-sm font-bold"
+            )
+            response_box = ui.textarea(placeholder='{ "roughcut": [ ... ] }').props(
+                "outlined"
+            ).classes("w-full h-40 font-mono text-xs")
+            ui.button(
+                "Montar stringout com esta resposta",
+                icon="build",
+                on_click=lambda: _finish_manual(response_box.value),
+            )
+
+    async def _finish_manual(raw: str) -> None:
+        if not raw or not raw.strip():
+            ui.notify("Cole a resposta da IA primeiro", type="warning")
+            return
+        record = manual_state["record"]
+        timer = ui.timer(0.4, manual_state["tailer"].poll)
+        status.text = "montando…"
+        try:
+            await run.io_bound(
+                pipeline.assemble_from_raw,
+                raw=raw,
+                clip_map=manual_state["clip_map"],
+                output=manual_state["output"],
+                record=record,
+            )
+            status.text = "concluído ✓"
+            manual_area.clear()
+            _show_results(record)
+        except Exception as exc:
+            status.text = f"erro: {exc}"
+            ui.notify(f"Falha ao montar: {exc}", type="negative", multi_line=True)
+        finally:
+            timer.deactivate()
+            manual_state["tailer"].poll()
+            _refresh_runs()
+
     async def _start_run() -> None:
-        if mode.value == "full" and not input_dir.value:
-            ui.notify("Pasta de clipes é obrigatória no modo completo", type="warning")
+        if mode.value in ("full", "manual") and not input_dir.value:
+            ui.notify("Pasta de clipes é obrigatória neste modo", type="warning")
             return
 
         run_button.disable()
         log.clear()
         results.clear()
+        manual_area.clear()
         status.text = "rodando…"
 
         params = {
@@ -149,7 +212,6 @@ def cockpit() -> None:
             "format": fmt.value,
             "model_size": model.value,
             "input": input_dir.value or None,
-            "output": None,
         }
         record = RunRecord.create(RUNS_DIR, params)
         output = str(record.dir / "stringout.mp4")
@@ -160,6 +222,21 @@ def cockpit() -> None:
                 await run.io_bound(
                     pipeline.run_dry, output=output, input=input_dir.value or None, record=record
                 )
+                status.text = "concluído ✓"
+                _show_results(record)
+            elif mode.value == "manual":
+                prompt, clip_map = await run.io_bound(
+                    pipeline.transcribe_and_prompt,
+                    input=input_dir.value,
+                    format=fmt.value,
+                    model_size=model.value,
+                    record=record,
+                )
+                manual_state.update(
+                    record=record, clip_map=clip_map, output=output, tailer=tailer
+                )
+                status.text = "prompt pronto — copie, rode na sua IA e cole a resposta"
+                _show_manual(prompt)
             else:
                 await run.io_bound(
                     pipeline.run_full,
@@ -169,8 +246,8 @@ def cockpit() -> None:
                     model_size=model.value,
                     record=record,
                 )
-            status.text = "concluído ✓"
-            _show_results(record)
+                status.text = "concluído ✓"
+                _show_results(record)
         except Exception as exc:
             status.text = f"erro: {exc}"
             ui.notify(f"Run falhou: {exc}", type="negative", multi_line=True)

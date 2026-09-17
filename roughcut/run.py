@@ -22,7 +22,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 from steps.assemble import assemble, load_cut_list  # noqa: E402
-from steps.order import order  # noqa: E402
+from steps.order import (  # noqa: E402
+    build_prompt,
+    load_format,
+    load_prompt_template,
+    order,
+    parse_cut_list,
+)
 from steps.run_record import RunRecord  # noqa: E402
 from steps.transcribe import list_clips, transcribe_folder  # noqa: E402
 
@@ -118,6 +124,66 @@ def run_dry(
     _print_critica(parsed)
     print(f"  run: {record.dir}")
     return record
+
+
+def build_order_prompt(transcripts: str, format: str = "qualidade-de-vida") -> str:
+    template = load_prompt_template(PROMPT_PATH)
+    format_yaml = load_format(_format_path(format))
+    return build_prompt(template, format_yaml, transcripts)
+
+
+def transcribe_and_prompt(
+    *,
+    input: str,
+    format: str = "qualidade-de-vida",
+    model_size: str = "base",
+    record: RunRecord | None = None,
+) -> tuple[str, dict[str, str]]:
+    """Fase manual A: transcreve localmente e monta o prompt para uma IA externa.
+
+    Não chama LLM nenhum. Devolve (prompt, clip_map) — o clip_map segue para o
+    assemble depois que o humano trouxer a resposta (assemble_from_raw).
+    """
+    if record is None:
+        record = RunRecord.create(
+            RUNS_DIR,
+            {"mode": "manual", "format": format, "model_size": model_size, "input": input},
+        )
+    with record.step("transcribe", input=input, model_size=model_size):
+        transcripts, clip_map = transcribe_folder(input, model_size=model_size)
+    record.artifact("transcripts", transcripts, filename="transcripts.txt")
+    record.event("transcribe", "clips_transcribed", count=len(clip_map), clip_ids=list(clip_map))
+
+    prompt = build_order_prompt(transcripts, format)
+    record.artifact("prompt", prompt, filename="prompt.md")
+    record.event("order", "prompt_ready", chars=len(prompt), source="manual")
+    return prompt, clip_map
+
+
+def assemble_from_raw(
+    *,
+    raw: str,
+    clip_map: dict[str, str],
+    output: str,
+    record: RunRecord,
+) -> dict:
+    """Fase manual B: recebe a resposta crua da IA escolhida e monta o stringout."""
+    record.artifact("llm_response", raw, filename="llm_response.txt")
+    record.event("order", "response_received", chars=len(raw), source="manual")
+    try:
+        cut_list = parse_cut_list(raw)
+        _save_cut_list_artifacts(record, cut_list)
+        with record.step("assemble", output=output):
+            assemble(cut_list, clip_map, output)
+        record.note_output("stringout", output)
+    except Exception as exc:
+        record.finalize("error", error=str(exc))
+        print(f"  run: {record.dir}")
+        raise
+    record.finalize("ok")
+    _print_critica(cut_list)
+    print(f"  run: {record.dir}")
+    return cut_list
 
 
 def run_full(

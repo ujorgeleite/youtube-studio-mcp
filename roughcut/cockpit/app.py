@@ -472,7 +472,9 @@ def cockpit() -> None:
                 ui.button("Reproduzir prévia", icon="play_arrow", on_click=_play_preview)
 
             ui.label(f"No vídeo — em ordem ({len(beats)} cortes)").classes("text-sm font-bold mt-3")
-            with ui.row().classes("flex-nowrap overflow-x-auto w-full gap-2 pb-2 items-stretch"):
+            with ui.row().classes("w-full gap-2 pb-2 items-stretch").style(
+                "flex-wrap:nowrap;overflow-x:auto"
+            ):
                 for idx, beat in enumerate(beats):
                     _timeline_card(idx, beat, run_id, thumbs)
 
@@ -481,7 +483,9 @@ def cockpit() -> None:
             )
             if not leftovers:
                 ui.label("todos os clipes estão no vídeo").classes("text-xs opacity-60")
-            with ui.row().classes("flex-nowrap overflow-x-auto w-full gap-2 pb-2 items-stretch"):
+            with ui.row().classes("w-full gap-2 pb-2 items-stretch").style(
+                "flex-wrap:nowrap;overflow-x:auto"
+            ):
                 for clip_id in leftovers:
                     with ui.card().classes("shrink-0 w-32 p-1 gap-1 opacity-80"):
                         if clip_id in thumbs:

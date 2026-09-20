@@ -7,7 +7,7 @@ FORMAT  ?= qualidade-de-vida
 OUTPUT  ?= ./stringout.mp4
 
 .DEFAULT_GOAL := help
-.PHONY: help install test test-verbose run dry-run cockpit check-ffmpeg lint clean
+.PHONY: help install test test-verbose test-silence run dry-run cockpit silence-ui check-ffmpeg lint clean
 
 help: ## List available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -25,6 +25,9 @@ test: ## Run the tests (no LLM, no Whisper)
 test-verbose: ## Run the tests with full output
 	$(PYTHON) -m pytest -v
 
+test-silence: ## Run only silence analysis/removal tests
+	$(PYTHON) -m pytest -q tests/test_silence_*.py
+
 run: check-ffmpeg ## Run the full pipeline (INPUT=... FORMAT=... OUTPUT=...)
 	$(PYTHON) run.py --input "$(INPUT)" --format "$(FORMAT)" --output "$(OUTPUT)"
 
@@ -33,6 +36,8 @@ dry-run: check-ffmpeg ## Assemble-only demo from the fixture cut-list (no LLM/Wh
 
 cockpit: check-ffmpeg ## Launch the cockpit UI in the browser (http://localhost:8080)
 	$(PYTHON) cockpit/app.py
+
+silence-ui: cockpit ## Launch the Cockpit; open /silence for silence removal
 
 check-ffmpeg: ## Verify ffmpeg is installed on the system
 	@command -v ffmpeg >/dev/null 2>&1 || { echo "ffmpeg não encontrado no PATH (brew install ffmpeg)"; exit 1; }

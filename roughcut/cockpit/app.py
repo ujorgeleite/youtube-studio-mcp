@@ -24,6 +24,7 @@ from nicegui import app, run, ui  # noqa: E402
 
 import run as pipeline  # noqa: E402
 from cockpit import preview  # noqa: E402
+from cockpit import silence as silence_page  # noqa: E402,F401
 from cockpit.filepicker import choose_directory  # noqa: E402
 from cockpit.runs import (  # noqa: E402
     RUNS_DIR,
@@ -153,6 +154,8 @@ def cockpit() -> None:
 
     with ui.header().classes("items-center"):
         ui.label("roughcut — cockpit").classes("text-lg font-bold")
+        ui.link("Pré-montagem", "/").classes("text-sm text-amber-300 font-bold")
+        ui.link("Remover silêncios", "/silence").classes("text-sm text-white")
         ui.space()
         ui.label("pré-montagem + logs ricos por run").classes("text-sm opacity-70")
 

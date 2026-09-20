@@ -15,6 +15,7 @@ stringout.mp4
 
 # registros de execução (logs ricos por run — artefatos locais)
 runs/
+*__remocao-de-silencios_*/
 
 # vídeos de teste/entrada (não commitar mídia grande)
 *.mp4

@@ -75,6 +75,38 @@ No modo manual, antes do render final há uma **prévia editável**: um player t
 trechos direto dos clipes de origem (sem renderizar), você reordena/remove cortes e
 insere clipes que ficaram de fora — e só então **aprova e monta** o stringout.
 
+## Remover silêncios
+
+O Cockpit também tem uma tela independente em `http://localhost:8080/silence`.
+Ela recebe uma pasta com vídeos raw, permite selecionar vários arquivos, analisa
+o áudio localmente e mostra os cortes propostos sobre uma forma de onda. Cada
+trecho mantido pode ser desmarcado ou ter início e fim ajustados antes do render.
+
+```bash
+make silence-ui
+# depois abra http://localhost:8080/silence
+```
+
+Existem três políticas por vídeo:
+
+- **Limpar ao redor dos diálogos:** detecta vários blocos de diálogo no mesmo
+  arquivo, remove os espaços antes, depois e entre blocos, e preserva pausas
+  naturais dentro de cada bloco.
+- **Remover todos os silêncios:** mantém cada ilha de fala com pequenas margens.
+- **Remoção cautelosa:** preserva pausas curtas e reduz pausas longas para uma
+  duração mínima, evitando cortes secos no meio da fala.
+
+O processamento nunca altera os arquivos raw. Por padrão, cria uma pasta irmã:
+
+```text
+<nome-da-pasta-raw>__remocao-de-silencios_<data>/
+├── video__sem-silencios.mp4
+└── video__plano-silencios.json
+```
+
+O JSON registra os silêncios encontrados, blocos de diálogo, parâmetros e
+intervalos mantidos. A análise e o corte usam `ffmpeg`/`ffprobe`; não chamam LLM.
+
 ## Runs (logs ricos para IA)
 
 Cada execução (CLI ou cockpit) escreve um bundle autocontido em `runs/<stamp>__<slug>/`:

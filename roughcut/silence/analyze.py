@@ -99,6 +99,7 @@ def detect_silences(path: str | Path, settings: SilenceSettings) -> tuple[float,
     proc = subprocess.run(
         [
             "ffmpeg", "-hide_banner", "-nostats", "-i", str(path),
+            "-vn",
             "-af", f"silencedetect=noise={settings.noise_db}dB:d={settings.min_silence_s}",
             "-f", "null", "-",
         ],

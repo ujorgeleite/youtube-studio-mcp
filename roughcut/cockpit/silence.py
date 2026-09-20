@@ -158,6 +158,12 @@ def silence_page() -> None:
                 "Cada vídeo gera um MP4 __sem-silencios e um JSON com o plano aplicado."
             ).classes("text-sm opacity-70")
             process_button = ui.button("Processar selecionados", icon="content_cut", color="green").classes("w-full")
+            with ui.row().classes("w-full items-center gap-3") as process_loader:
+                ui.spinner(size="lg")
+                with ui.column().classes("gap-0 flex-grow"):
+                    process_phase = ui.label("Preparando processamento…").classes("text-sm font-medium")
+                    process_detail = ui.label("").classes("text-xs opacity-70")
+            process_loader.set_visibility(False)
             process_status = ui.label("").classes("text-sm")
             process_progress = ui.linear_progress(value=0).classes("w-full")
             process_progress.set_visibility(False)
@@ -336,15 +342,49 @@ def silence_page() -> None:
             return
         destination = Path(output_dir.value).expanduser()
         process_button.disable()
+        process_loader.set_visibility(True)
         process_progress.set_visibility(True)
         process_progress.value = 0
         processed_box.clear()
         entries = list(state["analyses"].items())
         completed = 0
+        render_state = {"video": 0, "segment": 0, "segments": 1, "phase": "starting"}
+
+        def _render_progress(done: int, total: int) -> None:
+            render_state.update(segment=done, segments=max(1, total), phase="segments")
+
+        def _refresh_process_loader() -> None:
+            video_index = int(render_state["video"])
+            segment = int(render_state["segment"])
+            segments = int(render_state["segments"])
+            if render_state["phase"] == "concat":
+                within_video = 0.99
+                process_detail.text = "Unindo os trechos e finalizando o MP4…"
+            elif render_state["phase"] == "segments":
+                within_video = segment / segments
+                process_detail.text = f"Trecho {segment}/{segments} concluído"
+            else:
+                within_video = 0.0
+                process_detail.text = "Preparando os cortes…"
+            process_progress.value = min(0.99, (video_index + within_video) / len(entries))
+
+        loader_timer = ui.timer(0.2, _refresh_process_loader)
         try:
             for index, (path, entry) in enumerate(entries, 1):
-                process_status.text = f"Processando {index}/{len(entries)}: {Path(path).name}"
-                output, plan_path = await run.io_bound(render_plan, entry["plan"], destination)
+                render_state.update(
+                    video=index - 1, segment=0, segments=max(1, len(entry["plan"]["keep"])), phase="starting"
+                )
+                process_phase.text = f"Vídeo {index}/{len(entries)}: {Path(path).name}"
+                process_status.text = "Renderização em andamento"
+
+                def _progress_then_concat(done: int, total: int) -> None:
+                    _render_progress(done, total)
+                    if done >= total:
+                        render_state["phase"] = "concat"
+
+                output, plan_path = await run.io_bound(
+                    render_plan, entry["plan"], destination, _progress_then_concat
+                )
                 key = _media_key(str(output))
                 RESULT_REGISTRY[key] = str(output)
                 completed += 1
@@ -356,11 +396,15 @@ def silence_page() -> None:
                         ui.label(f"Vídeo: {output}").classes("text-xs opacity-70")
                         ui.label(f"Plano JSON: {plan_path}").classes("text-xs opacity-70")
             process_status.text = f"Concluído. {completed} vídeo(s) em: {destination.resolve()}"
+            process_phase.text = "Processamento concluído"
+            process_detail.text = f"{completed} vídeo(s) gerado(s)"
             ui.notify(f"Vídeos salvos em {destination.resolve()}", type="positive", multi_line=True)
         except Exception as exc:
             process_status.text = f"Falha: {exc}"
             ui.notify(f"Processamento falhou: {exc}", type="negative", multi_line=True)
         finally:
+            loader_timer.deactivate()
+            process_loader.set_visibility(False)
             process_button.enable()
 
     browse.on_click(_choose_folder)

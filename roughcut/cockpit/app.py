@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -148,6 +149,7 @@ def cockpit() -> None:
     ui.dark_mode().enable()
     manual_state: dict = {}
     last_run: dict = {}
+    assemble_state: dict[str, float] = {}
 
     with ui.header().classes("items-center"):
         ui.label("roughcut — cockpit").classes("text-lg font-bold")
@@ -207,8 +209,12 @@ def cockpit() -> None:
         clip_label = ui.label("").classes("text-sm")
         clip_progress = ui.linear_progress(value=0.0, show_value=False).classes("w-full")
         clip_progress.set_visibility(False)
-        ui.label("Log ao vivo").classes("text-sm font-bold mt-2")
-        log = ui.log(max_lines=2000).classes("w-full h-64 bg-black text-green-300 text-xs")
+        assemble_label = ui.label("").classes("text-sm font-medium")
+        assemble_label.set_visibility(False)
+        assemble_progress = ui.linear_progress(value=0.0, show_value=False).classes("w-full")
+        assemble_progress.set_visibility(False)
+        with ui.expansion("Detalhes técnicos (log ao vivo)", icon="terminal").classes("w-full mt-2"):
+            log = ui.log(max_lines=2000).classes("w-full h-64 bg-black text-green-300 text-xs")
         manual_area = ui.column().classes("w-full")
         results = ui.column().classes("w-full")
 
@@ -242,6 +248,37 @@ def cockpit() -> None:
             timeline.set("order", MARK_WAIT, sub="aguardando você colar a resposta")
         elif step == "order" and name == "response_received":
             timeline.set("order", MARK_DONE)
+        elif step == "assemble" and name == "segment_start":
+            assemble_state.setdefault("started", time.monotonic())
+            total_seconds = float(payload["total_seconds"])
+            completed_seconds = float(payload["completed_seconds"])
+            assemble_progress.set_visibility(True)
+            assemble_progress.value = completed_seconds / total_seconds if total_seconds else 0.0
+            assemble_label.set_visibility(True)
+            source = payload.get("clip_id", "B-roll")
+            assemble_label.text = (
+                f"Montando trecho {payload['index']}/{payload['total']}: {source} "
+                f"({_tc(float(payload['seconds']))})"
+            )
+            timeline.set("assemble", MARK_ACTIVE, sub=f"trecho {payload['index']}/{payload['total']}")
+        elif step == "assemble" and name == "segment_done":
+            total_seconds = float(payload["total_seconds"])
+            completed_seconds = float(payload["completed_seconds"])
+            progress = completed_seconds / total_seconds if total_seconds else 0.0
+            assemble_progress.value = progress
+            elapsed = time.monotonic() - assemble_state.setdefault("started", time.monotonic())
+            remaining = elapsed * (1 - progress) / progress if progress else 0.0
+            assemble_label.text = (
+                f"Montagem {payload['index']}/{payload['total']} · {progress:.0%} "
+                f"· cerca de {_tc(remaining)} restantes"
+            )
+        elif step == "assemble" and name == "concat_start":
+            assemble_label.set_visibility(True)
+            assemble_label.text = "Unindo os trechos e finalizando o arquivo…"
+            assemble_progress.value = 0.99
+        elif step == "assemble" and name == "concat_done":
+            assemble_progress.value = 1.0
+            assemble_label.text = "Vídeo finalizado — preparando a prévia…"
 
     def _begin_run() -> None:
         controls_card.set_visibility(False)
@@ -254,6 +291,9 @@ def cockpit() -> None:
         results.clear()
         clip_label.text = ""
         clip_progress.set_visibility(False)
+        assemble_state.clear()
+        assemble_label.set_visibility(False)
+        assemble_progress.set_visibility(False)
 
     def _new_run() -> None:
         manual_state.clear()
@@ -515,29 +555,30 @@ def cockpit() -> None:
         _show_editor()
 
     async def _approve() -> None:
-        record = manual_state["record"]
-        _loading("Montando o vídeo final (ffmpeg)…")
-        timer = ui.timer(0.4, manual_state["tailer"].poll)
-        try:
-            await run.io_bound(
-                pipeline.assemble_approved,
-                cut_list=manual_state["cut_list"],
-                clip_map=manual_state["clip_map"],
-                output=manual_state["output"],
-                record=record,
-            )
-            status.text = "concluído ✓"
-            last_run.update(record=record, clip_map=manual_state["clip_map"])
-            manual_area.clear()
-            _show_results(record)
-        except Exception as exc:
-            status.text = f"erro: {exc}"
-            ui.notify(f"Falha ao montar: {exc}", type="negative", multi_line=True)
-            _show_editor()
-        finally:
-            timer.deactivate()
-            manual_state["tailer"].poll()
-            _refresh_runs()
+        with monitor_card:
+            record = manual_state["record"]
+            _loading("Montando o vídeo final (ffmpeg)…")
+            timer = ui.timer(0.4, manual_state["tailer"].poll)
+            try:
+                await run.io_bound(
+                    pipeline.assemble_approved,
+                    cut_list=manual_state["cut_list"],
+                    clip_map=manual_state["clip_map"],
+                    output=manual_state["output"],
+                    record=record,
+                )
+                status.text = "concluído ✓"
+                last_run.update(record=record, clip_map=manual_state["clip_map"])
+                manual_area.clear()
+                _show_results(record)
+            except Exception as exc:
+                status.text = f"erro: {exc}"
+                ui.notify(f"Falha ao montar: {exc}", type="negative", multi_line=True)
+                _show_editor()
+            finally:
+                timer.deactivate()
+                manual_state["tailer"].poll()
+                _refresh_runs()
 
     async def _start_run() -> None:
         if mode.value in ("full", "manual") and not input_dir.value:

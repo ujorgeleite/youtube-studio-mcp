@@ -31,6 +31,8 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 VIDEO_W = 1280
@@ -56,6 +58,9 @@ class _Segment:
     beat: str
     kind: str  # "clip" | "broll"
     seconds: float
+
+
+AssembleProgress = Callable[[str, dict[str, object]], None]
 
 
 def parse_timecode(tc: str) -> float:
@@ -193,7 +198,12 @@ def _concat(segment_files: list[str], output_path: str, workdir: str) -> None:
         raise AssembleError(f"falha ao concatenar: {proc.stderr.strip()}")
 
 
-def assemble(cut_list: dict, clip_map: dict[str, str], output_path: str) -> list[_Segment]:
+def assemble(
+    cut_list: dict,
+    clip_map: dict[str, str],
+    output_path: str,
+    on_progress: AssembleProgress | None = None,
+) -> list[_Segment]:
     """Monta o stringout a partir da cut-list.
 
     `clip_map` mapeia clip_id -> caminho do arquivo de vídeo.
@@ -205,6 +215,24 @@ def assemble(cut_list: dict, clip_map: dict[str, str], output_path: str) -> list
         raise AssembleError("cut-list vazia ou sem a chave 'roughcut'")
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True)
+
+    planned_segments = [
+        (beat.get("beat", f"beat_{index}"), clip)
+        for index, beat in enumerate(beats)
+        for clip in (beat.get("clips") or [None])
+    ]
+    total_seconds = sum(
+        parse_timecode(clip["out"]) - parse_timecode(clip["in"])
+        if clip is not None
+        else BROLL_SLUG_SECONDS
+        for _, clip in planned_segments
+    )
+    total_segments = len(planned_segments)
+    completed_seconds = 0.0
+
+    def report(event: str, **payload: object) -> None:
+        if on_progress is not None:
+            on_progress(event, payload)
 
     segments: list[_Segment] = []
     segment_files: list[str] = []
@@ -224,20 +252,63 @@ def assemble(cut_list: dict, clip_map: dict[str, str], output_path: str) -> list
                     end = parse_timecode(clip["out"])
                     duration = end - start
                     dest = os.path.join(workdir, f"seg_{idx:03d}.mp4")
+                    report(
+                        "segment_start",
+                        index=idx + 1,
+                        total=total_segments,
+                        beat=beat_name,
+                        clip_id=clip_id,
+                        kind="clip",
+                        seconds=duration,
+                        completed_seconds=completed_seconds,
+                        total_seconds=total_seconds,
+                    )
+                    started = time.monotonic()
                     _cut_clip(clip_map[clip_id], start, duration, dest)
+                    completed_seconds += duration
+                    report(
+                        "segment_done",
+                        index=idx + 1,
+                        total=total_segments,
+                        completed_seconds=completed_seconds,
+                        total_seconds=total_seconds,
+                        duration_ms=round((time.monotonic() - started) * 1000),
+                    )
                     segment_files.append(dest)
                     segments.append(_Segment(beat_name, "clip", duration))
                     idx += 1
             else:
                 dest = os.path.join(workdir, f"seg_{idx:03d}.mp4")
+                report(
+                    "segment_start",
+                    index=idx + 1,
+                    total=total_segments,
+                    beat=beat_name,
+                    kind="broll",
+                    seconds=BROLL_SLUG_SECONDS,
+                    completed_seconds=completed_seconds,
+                    total_seconds=total_seconds,
+                )
+                started = time.monotonic()
                 _make_broll_slug(beat.get("broll_suggestion", ""), dest, workdir)
+                completed_seconds += BROLL_SLUG_SECONDS
+                report(
+                    "segment_done",
+                    index=idx + 1,
+                    total=total_segments,
+                    completed_seconds=completed_seconds,
+                    total_seconds=total_seconds,
+                    duration_ms=round((time.monotonic() - started) * 1000),
+                )
                 segment_files.append(dest)
                 segments.append(_Segment(beat_name, "broll", float(BROLL_SLUG_SECONDS)))
                 idx += 1
 
         if not segment_files:
             raise AssembleError("nenhum segmento gerado a partir da cut-list")
+        report("concat_start", total=total_segments, total_seconds=total_seconds)
         _concat(segment_files, output_path, workdir)
+        report("concat_done", total=total_segments, total_seconds=total_seconds)
 
     return segments
 

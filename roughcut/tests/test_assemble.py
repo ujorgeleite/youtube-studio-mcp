@@ -98,6 +98,25 @@ def test_assemble_orders_segments_correctly(tmp_path, cut_list, clip_map):
     assert _dominant_color(out, 6.0) == "blue"
 
 
+def test_assemble_reports_segment_and_concat_progress(tmp_path, cut_list, clip_map):
+    events = []
+
+    assemble(
+        cut_list,
+        clip_map,
+        str(tmp_path / "stringout.mp4"),
+        on_progress=lambda event, payload: events.append((event, payload)),
+    )
+
+    assert [event for event, _ in events] == [
+        "segment_start", "segment_done", "segment_start", "segment_done",
+        "segment_start", "segment_done", "segment_start", "segment_done",
+        "concat_start", "concat_done",
+    ]
+    assert events[0][1]["total"] == 4
+    assert events[7][1]["completed_seconds"] == events[7][1]["total_seconds"]
+
+
 def test_cut_list_fixture_matches_schema():
     with open(os.path.join(FIXTURES_DIR, "cut_list.json"), encoding="utf-8") as fh:
         data = json.load(fh)

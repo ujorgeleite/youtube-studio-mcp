@@ -43,7 +43,9 @@ def test_assemble_from_raw_parses_and_assembles(tmp_path, monkeypatch):
     monkeypatch.setattr(
         pipeline,
         "assemble",
-        lambda cut_list, clip_map, output: captured.update(cut_list=cut_list, output=output),
+        lambda cut_list, clip_map, output, on_progress=None: captured.update(
+            cut_list=cut_list, output=output, on_progress=on_progress
+        ),
     )
     record = _record(tmp_path)
     raw = '```json\n{"roughcut": [{"beat": "x", "clips": []}]}\n```'
@@ -54,6 +56,7 @@ def test_assemble_from_raw_parses_and_assembles(tmp_path, monkeypatch):
 
     assert result == {"roughcut": [{"beat": "x", "clips": []}]}
     assert captured["output"].endswith("out.mp4")
+    assert callable(captured["on_progress"])
     assert (record.dir / "llm_response.txt").is_file()
     assert (record.dir / "cut-list.json").is_file()
     manifest = json.loads((record.dir / "run.json").read_text(encoding="utf-8"))

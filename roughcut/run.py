@@ -120,7 +120,12 @@ def run_dry(
         record.event("assemble", "clips_resolved", count=len(clip_map), clip_ids=list(clip_map))
 
         with record.step("assemble", output=output):
-            assemble(parsed, clip_map, output)
+            assemble(
+                parsed,
+                clip_map,
+                output,
+                on_progress=lambda event, payload: record.event("assemble", event, **payload),
+            )
         record.note_output("stringout", output)
     except Exception as exc:
         record.finalize("error", error=str(exc))
@@ -191,7 +196,12 @@ def assemble_approved(
     _save_cut_list_artifacts(record, cut_list)
     try:
         with record.step("assemble", output=output):
-            assemble(cut_list, clip_map, output)
+            assemble(
+                cut_list,
+                clip_map,
+                output,
+                on_progress=lambda event, payload: record.event("assemble", event, **payload),
+            )
         record.note_output("stringout", output)
     except Exception as exc:
         record.finalize("error", error=str(exc))
@@ -271,7 +281,12 @@ def run_full(
 
         print("[3/3] montando o stringout (ffmpeg) ...")
         with record.step("assemble", output=output):
-            assemble(cut_list, clip_map, output)
+            assemble(
+                cut_list,
+                clip_map,
+                output,
+                on_progress=lambda event, payload: record.event("assemble", event, **payload),
+            )
         record.note_output("stringout", output)
     except Exception as exc:
         record.finalize("error", error=str(exc))

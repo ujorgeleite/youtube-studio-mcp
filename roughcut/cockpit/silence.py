@@ -11,13 +11,15 @@ from fastapi.responses import FileResponse
 from nicegui import app, run, ui
 
 from cockpit.filepicker import choose_directory
-from silence.analyze import analyze_video, list_videos, probe_duration
+from silence.analyze import analyze_video, extract_thumbnail, list_videos, probe_duration
 from silence.policy import MODES, complement, plan_for
 from silence.render import default_output_dir, render_plan
 from silence.schema import Interval, SilenceSettings
 
 SOURCE_REGISTRY: dict[str, str] = {}
 RESULT_REGISTRY: dict[str, str] = {}
+THUMB_REGISTRY: dict[str, str] = {}
+THUMB_DIR = Path(__file__).resolve().parents[1] / ".silence-cache" / "thumbnails"
 
 
 def _media_key(path: str) -> str:
@@ -35,6 +37,14 @@ def _serve_source(key: str):
 @app.get("/silence-result/{key}")
 def _serve_result(key: str):
     path = RESULT_REGISTRY.get(key)
+    if not path or not Path(path).is_file():
+        raise HTTPException(status_code=404)
+    return FileResponse(path)
+
+
+@app.get("/silence-thumbnail/{key}")
+def _serve_thumbnail(key: str):
+    path = THUMB_REGISTRY.get(key)
     if not path or not Path(path).is_file():
         raise HTTPException(status_code=404)
     return FileResponse(path)
@@ -159,14 +169,21 @@ def silence_page() -> None:
     def _render_file_list() -> None:
         files_box.clear()
         with files_box:
-            for item in state["files"]:
-                with ui.row().classes("w-full items-center gap-2"):
-                    checkbox = ui.checkbox(value=item["selected"])
-                    checkbox.on_value_change(
-                        lambda event, current=item: current.update(selected=bool(event.value))
-                    )
-                    ui.label(item["name"]).classes("flex-grow")
-                    ui.label(_clock(item["duration_s"])).classes("text-xs opacity-60")
+            with ui.row().classes("w-full gap-3 items-stretch").style("flex-wrap:wrap"):
+                for item in state["files"]:
+                    with ui.card().classes("w-52 p-2 gap-1"):
+                        ui.image(f"/silence-thumbnail/{item['key']}").classes(
+                            "w-full rounded bg-black"
+                        ).style("height:117px;object-fit:contain")
+                        with ui.row().classes("w-full items-start gap-1 no-wrap"):
+                            checkbox = ui.checkbox(value=item["selected"]).props("dense")
+                            checkbox.on_value_change(
+                                lambda event, current=item: current.update(selected=bool(event.value))
+                            )
+                            ui.label(item["name"]).classes(
+                                "text-sm font-medium break-all flex-grow"
+                            )
+                        ui.label(_clock(item["duration_s"])).classes("text-xs opacity-60")
 
     def _set_selection(value: bool | None) -> None:
         for item in state["files"]:
@@ -190,6 +207,12 @@ def silence_page() -> None:
                 duration = await run.io_bound(probe_duration, path)
                 key = _media_key(str(path))
                 SOURCE_REGISTRY[key] = str(path)
+                thumbnail = THUMB_DIR / f"{key}.jpg"
+                if not thumbnail.is_file():
+                    await run.io_bound(
+                        extract_thumbnail, path, thumbnail, duration_s=duration
+                    )
+                THUMB_REGISTRY[key] = str(thumbnail)
                 files.append(
                     {"path": str(path), "name": path.name, "duration_s": duration, "selected": True, "key": key}
                 )

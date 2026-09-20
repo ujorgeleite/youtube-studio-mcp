@@ -47,6 +47,32 @@ def probe_duration(path: str | Path) -> float:
         raise SilenceAnalysisError(f"duração inválida para {path}") from exc
 
 
+def extract_thumbnail(
+    path: str | Path,
+    destination: str | Path,
+    *,
+    duration_s: float | None = None,
+) -> Path:
+    """Extrai um frame representativo sem alterar o vídeo de origem."""
+    duration = duration_s if duration_s is not None else probe_duration(path)
+    at_s = min(max(duration * 0.1, 0.0), max(0.0, duration - 0.05))
+    target = Path(destination)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.run(
+        [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-ss", f"{at_s:.3f}", "-i", str(path), "-frames:v", "1",
+            "-vf", "scale=320:180:force_original_aspect_ratio=decrease,"
+            "pad=320:180:(ow-iw)/2:(oh-ih)/2", str(target),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0 or not target.is_file():
+        raise SilenceAnalysisError(f"não foi possível gerar miniatura de {path}")
+    return target
+
+
 def parse_silencedetect(log: str, duration_s: float) -> list[Interval]:
     intervals: list[Interval] = []
     pending_start: float | None = None
@@ -113,4 +139,3 @@ def analyze_video(path: str | Path, settings: SilenceSettings | None = None) -> 
         waveform=extract_waveform(path),
         settings=selected,
     )
-

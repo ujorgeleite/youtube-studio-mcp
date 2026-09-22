@@ -291,12 +291,9 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                 plan, artifacts = await run.io_bound(analyze_clip, entry["path"], output.value, preset=preset.value, analysis_source=source)
                 entry.update(plan=plan, artifacts=artifacts, disabled_cuts=set(), rules=load_rules(preset.value)); progress.value = index / len(targets)
                 refresh_review_selector()
-                current = item()
-                if not current or not current.get("plan"):
-                    select(entry)
-                else:
-                    render_files()
-                    if entry["path"] == state["selected"]: render_review()
+                render_files()
+            # A new batch must become visible even when the previous review already has a plan.
+            select(targets[0])
             status.text = "Análise concluída. Revise os cortes antes de processar."
         except Exception as exc:
             status.text = f"Falha na análise: {exc}"

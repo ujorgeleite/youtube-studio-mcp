@@ -86,3 +86,33 @@ def test_switching_review_video_preserves_its_cuts_and_rules():
             assert selector.options == {'a.mp4': 'a.mp4', 'b.mp4': 'b.mp4'}
 
     asyncio.run(exercise())
+
+
+def test_new_analysis_batch_replaces_an_already_open_review(monkeypatch):
+    async def exercise():
+        async def inline(function, *args, **kwargs):
+            return function(*args, **kwargs)
+
+        old_plan = CutPlan('old.mp4', 10, 'colab', words=[Word(0, 1, 'velho')])
+        new_plan = CutPlan('new.mp4', 10, 'colab', words=[Word(0, 1, 'novo'), Word(3, 4, 'vídeo')], cuts=[Cut(1.1, 2.9, 'pausa_na_frase')])
+        monkeypatch.setattr(silence.run, 'io_bound', inline)
+        monkeypatch.setattr(silence, 'analyze_clip', lambda *a, **k: (new_plan, {'plan': Path('new.json')}))
+        with Client(page('/new-batch-test')) as client:
+            silence.smartcut_page()
+            button = next(e for e in client.elements.values()
+                          if isinstance(e, ui.button) and e.text == 'Analisar selecionados')
+            callback = inspect.getclosurevars(next(iter(button._event_listeners.values())).handler).nonlocals['callback']
+            refs = inspect.getclosurevars(callback).nonlocals
+            refs['normalize'].value = False
+            refs['output'].value = '/tmp/new-batch-test'
+            refs['state'].update(selected='old.mp4', files=[
+                dict(path='old.mp4', name='old.mp4', duration=10, selected=False, thumb_key='old', plan=old_plan, artifacts={}, disabled_cuts=set(), rules=silence.load_rules('colab')),
+                dict(path='new.mp4', name='new.mp4', duration=10, selected=True, thumb_key='new'),
+            ])
+            await callback()
+            assert refs['state']['selected'] == 'new.mp4'
+            texts = [str(getattr(e, 'text', '')) for e in client.elements.values()]
+            assert 'novo vídeo' in texts
+            assert '1 ativos · 0 mantidos' in texts
+
+    asyncio.run(exercise())

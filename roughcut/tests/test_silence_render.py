@@ -35,6 +35,7 @@ def test_render_plan_creates_new_video_and_json_without_touching_source(tmp_path
     plan = {
         "source": source,
         "mode": "all",
+        "duration_s": 5.0,
         "keep": [{"start_s": 0.5, "end_s": 1.5}, {"start_s": 3.0, "end_s": 4.0}],
     }
 
@@ -44,6 +45,20 @@ def test_render_plan_creates_new_video_and_json_without_touching_source(tmp_path
     assert output.name == "C01__sem-silencios.mp4"
     assert plan_path.is_file()
     assert _duration(output) == pytest.approx(2.0, abs=0.2)
-    assert progress == [(1, 2), (2, 2)]
+    assert progress == [(0, 2), (2, 2)]
     assert (tmp_path / "raw" / "C01.mp4").stat().st_mtime_ns == source_mtime
 
+
+def test_render_plan_copies_original_when_removal_is_not_relevant(tmp_path):
+    source = make_clips(str(tmp_path / "raw"))["C01"]
+    plan = {
+        "source": source,
+        "duration_s": 5.0,
+        "keep": [{"start_s": 0.0, "end_s": 4.8}],
+        "render_options": {"min_removed_s": 1.0, "min_removed_pct": 0.25},
+    }
+
+    output, plan_path = render_plan(plan, tmp_path / "out")
+
+    assert output.read_bytes() == (tmp_path / "raw" / "C01.mp4").read_bytes()
+    assert json.loads(plan_path.read_text())["render"]["strategy"] == "copy_original"

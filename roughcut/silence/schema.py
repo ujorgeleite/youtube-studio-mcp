@@ -34,14 +34,19 @@ class VideoAnalysis:
     silences: list[Interval]
     waveform: list[float] = field(default_factory=list)
     settings: SilenceSettings = field(default_factory=SilenceSettings)
+    analysis_source: str | None = None
+    analysis_source_kind: str = "original"
+    analysis_duration_delta_s: float = 0.0
 
     def as_dict(self) -> dict:
         return {
             "version": 1,
             "source": self.source,
+            "analysis_source": self.analysis_source or self.source,
+            "analysis_source_kind": self.analysis_source_kind,
+            "analysis_duration_delta_s": round(self.analysis_duration_delta_s, 3),
             "duration_s": round(self.duration_s, 3),
             "settings": asdict(self.settings),
             "silences": [item.as_dict() for item in self.silences],
             "waveform": self.waveform,
         }
-

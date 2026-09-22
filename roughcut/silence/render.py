@@ -46,35 +46,53 @@ def render_plan(
     destination = Path(output_dir).expanduser().resolve()
     destination.mkdir(parents=True, exist_ok=True)
     output = destination / f"{source.stem}__sem-silencios.mp4"
-    plan_path = destination / f"{source.stem}__plano-silencios.json"
-    plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    with tempfile.TemporaryDirectory(prefix="roughcut_silence_") as temp:
-        work = Path(temp)
-        segments: list[Path] = []
+    removed_s = max(0.0, float(plan.get("duration_s", 0)) - sum(item.duration_s for item in keeps))
+    options = plan.get("render_options", {})
+    removed_pct = 100 * removed_s / float(plan.get("duration_s", 1) or 1)
+    should_copy = (
+        not options.get("always_render", False)
+        and (removed_s < float(options.get("min_removed_s", 1.0))
+             or removed_pct < float(options.get("min_removed_pct", 0.25)))
+    )
+    if should_copy:
+        shutil.copy2(source, output)
+        plan["render"] = {
+            "strategy": "copy_original",
+            "reason": "remocao_abaixo_do_limite",
+            "removed_s": round(removed_s, 3),
+            "removed_pct": round(removed_pct, 3),
+        }
+    else:
+        filters: list[str] = []
+        streams: list[str] = []
         for index, keep in enumerate(keeps):
-            segment = work / f"segment_{index:04d}.mp4"
-            _run(
+            filters.extend(
                 [
-                    "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-                    "-ss", f"{keep.start_s:.3f}", "-t", f"{keep.duration_s:.3f}",
-                    "-i", str(source),
-                    "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=30,format=yuv420p",
-                    "-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac",
-                    "-ar", "44100", "-ac", "2", str(segment),
+                    f"[0:v]trim=start={keep.start_s:.3f}:end={keep.end_s:.3f},setpts=PTS-STARTPTS,"
+                    "scale=1280:720:force_original_aspect_ratio=decrease,"
+                    "pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=30,format=yuv420p[v" + str(index) + "]",
+                    f"[0:a]atrim=start={keep.start_s:.3f}:end={keep.end_s:.3f},asetpts=PTS-STARTPTS[a{index}]",
                 ]
             )
-            segments.append(segment)
-            if on_progress:
-                on_progress(index + 1, len(keeps))
-        concat_file = work / "concat.txt"
-        concat_file.write_text(
-            "".join(f"file '{segment}'\n" for segment in segments), encoding="utf-8"
-        )
+            streams.extend([f"[v{index}]", f"[a{index}]"])
+        filters.append("".join(streams) + f"concat=n={len(keeps)}:v=1:a=1[v][a]")
+        if on_progress:
+            on_progress(0, len(keeps))
         _run(
             [
-                "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-f", "concat",
-                "-safe", "0", "-i", str(concat_file), "-c", "copy", str(output),
+                "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(source),
+                "-filter_complex", ";".join(filters), "-map", "[v]", "-map", "[a]",
+                "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac",
+                "-ar", "44100", "-ac", "2", output,
             ]
         )
+        if on_progress:
+            on_progress(len(keeps), len(keeps))
+        plan["render"] = {
+            "strategy": "single_pass_ffmpeg",
+            "removed_s": round(removed_s, 3),
+            "removed_pct": round(removed_pct, 3),
+        }
+    plan_path = destination / f"{source.stem}__plano-silencios.json"
+    plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     return output, plan_path

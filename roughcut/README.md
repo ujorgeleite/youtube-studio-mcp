@@ -107,6 +107,16 @@ O processamento nunca altera os arquivos raw. Por padrão, cria uma pasta irmã:
 O JSON registra os silêncios encontrados, blocos de diálogo, parâmetros e
 intervalos mantidos. A análise e o corte usam `ffmpeg`/`ffprobe`; não chamam LLM.
 
+A tela usa uma lista compacta com filtros, indicadores de ganho e um painel de
+inspeção do vídeo selecionado. A análise e a renderização podem rodar em
+paralelo, com limite configurável. Quando houver um proxy DJI `.LRF` com áudio e
+duração compatível, ele é usado para análise, waveform e miniatura; o render
+final sempre usa o `.MP4` original.
+
+Quando a remoção total não atingir os limites definidos na tela, o vídeo é
+copiado para a pasta de resultado sem reencodificação. Marque **Sempre
+renderizar** para ignorar essa decisão.
+
 ## Runs (logs ricos para IA)
 
 Cada execução (CLI ou cockpit) escreve um bundle autocontido em `runs/<stamp>__<slug>/`:

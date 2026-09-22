@@ -113,5 +113,9 @@ def plan_for(analysis: VideoAnalysis, mode: str, keeps: list[Interval] | None = 
         ],
         "keep": [item.as_dict() for item in selected],
         "estimated_output_duration_s": round(sum(item.duration_s for item in selected), 3),
+        "render_options": {
+            "min_removed_s": 1.0,
+            "min_removed_pct": 0.25,
+            "always_render": False,
+        },
     }
-

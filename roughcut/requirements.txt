@@ -1,4 +1,7 @@
 faster-whisper
+mlx-whisper
+silero-vad
+rapidfuzz
 pyyaml
 anthropic
 nicegui

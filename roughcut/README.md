@@ -55,36 +55,23 @@ ou `ant auth login`).
 
 Flags: `--input`, `--format`, `--output`, `--dry-run`, `--cut-list`, `--model-size`.
 
-## Cockpit (UI)
+## Interface de revisão
 
-Interface de testes no navegador (NiceGUI): dispara o pipeline, transmite o
-`events.jsonl` ao vivo, mostra o stringout e navega os runs anteriores com
-download do bundle (zip) para análise por IA.
-
-```bash
-make cockpit          # abre em http://localhost:8080
-# ou: .venv/bin/python cockpit/app.py
-```
-
-Modo **dry-run** sem pasta de clipes usa os clipes de demonstração — dá para ver a
-UI e um run completo sem LLM, Whisper ou mídia. O modo **completo** exige
-`ANTHROPIC_API_KEY` e uma pasta de clipes. O modo **manual** transcreve localmente,
-mostra o prompt para você rodar na IA de sua preferência e colar a resposta.
-
-No modo manual, antes do render final há uma **prévia editável**: um player toca os
-trechos direto dos clipes de origem (sem renderizar), você reordena/remove cortes e
-insere clipes que ficaram de fora — e só então **aprova e monta** o stringout.
-
-## Remover silêncios
-
-O Cockpit também tem uma tela independente em `http://localhost:8080/silence`.
-Ela recebe uma pasta com vídeos raw, permite selecionar vários arquivos, analisa
-o áudio localmente e mostra os cortes propostos sobre uma forma de onda. Cada
-trecho mantido pode ser desmarcado ou ter início e fim ajustados antes do render.
+A ferramenta de remoção inteligente usa apenas NiceGUI. Ela abre uma tela de
+revisão com regras à esquerda, timeline e cortes ao centro, e resultado à direita.
 
 ```bash
 make silence-ui
-# depois abra http://localhost:8080/silence
+```
+
+## Remover silêncios
+
+Ela recebe uma pasta com vídeos raw, usa Silero VAD e MLX Whisper para gerar
+cortes entre palavras e mostra os cortes propostos para revisão antes do render.
+
+```bash
+make silence-ui
+# depois abra http://localhost:8080
 ```
 
 Existem três políticas por vídeo:
@@ -117,9 +104,29 @@ Quando a remoção total não atingir os limites definidos na tela, o vídeo é
 copiado para a pasta de resultado sem reencodificação. Marque **Sempre
 renderizar** para ignorar essa decisão.
 
+## Corte inteligente por fala/frase
+
+O novo fluxo usa Silero VAD para mapear fala, `mlx-whisper` com
+`large-v3-turbo` e timestamps por palavra, e regras que só cortam entre
+palavras. Ele mantém respiro, preserva pausas configuradas e detecta retakes
+consecutivos, mantendo o último take.
+
+```bash
+make smartcut INPUT=/caminho/para/raw FORMAT=colab
+```
+
+Os presets ficam em `config/presets.yaml`; o glossário de nomes e expressões
+fica em `config/glossario.yaml`. A pasta irmã `raw__corte-inteligente/` contém
+JSON fonte de verdade, SRT, relatório de revisão, FCPXML apontando ao original
+e uma pasta `.cache/` que evita reexecutar VAD ou transcrição ao ajustar regras.
+
+DeepFilterNet permanece opcional: a distribuição atual precisa de Rust/Cargo
+para compilar no Python 3.14. A normalização `loudnorm` em duas passadas já está
+disponível na interface.
+
 ## Runs (logs ricos para IA)
 
-Cada execução (CLI ou cockpit) escreve um bundle autocontido em `runs/<stamp>__<slug>/`:
+Cada execução do pipeline legado escreve um bundle autocontido em `runs/<stamp>__<slug>/`:
 `run.json` (manifesto: params, ambiente, timing por passo, artefatos, status),
 `events.jsonl` (log estruturado append-only) e os artefatos de cada passo
 (`transcripts.txt`, `prompt.md`, `llm_response.txt`, `cut-list.json`, `critica.json`).

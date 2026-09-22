@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .silence-cache/
+.smartcut-cache/
 
 # modelos do Whisper baixados em cache
 models/
@@ -17,6 +18,7 @@ stringout.mp4
 # registros de execução (logs ricos por run — artefatos locais)
 runs/
 *__remocao-de-silencios_*/
+*__corte-inteligente/
 
 # vídeos de teste/entrada (não commitar mídia grande)
 *.mp4

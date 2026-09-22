@@ -135,6 +135,8 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                 transcript_box = ui.column().classes("w-full mt-3")
             with ui.card().classes("rc-card w-1/4 min-w-72 p-4"):
                 ui.label("Resultado").classes("font-bold")
+                batch_box = ui.column().classes("w-full gap-2 mt-3")
+                ui.separator()
                 result_box = ui.column().classes("w-full gap-3 mt-3")
         with ui.card().classes("rc-card w-full p-3"):
             with ui.row().classes("w-full items-center"):
@@ -150,6 +152,25 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
 
     def item() -> dict | None:
         return next((entry for entry in state["files"] if entry["path"] == state["selected"]), None)
+
+    def reviewed_cuts(entry: dict) -> list[Cut]:
+        disabled = entry.setdefault("disabled_cuts", set())
+        return [cut for index, cut in enumerate(entry["plan"].cuts) if index not in disabled]
+
+    def render_batch_summary() -> None:
+        batch_box.clear()
+        analyzed = [entry for entry in state["files"] if entry.get("plan")]
+        with batch_box:
+            ui.label("LOTE ANALISADO").classes("text-xs font-bold rc-muted")
+            if not analyzed:
+                ui.label("Ainda não há vídeos analisados.").classes("text-xs rc-muted")
+                return
+            original = sum(entry["duration"] for entry in analyzed)
+            removed = sum(sum(cut.end_s - cut.start_s for cut in reviewed_cuts(entry)) for entry in analyzed)
+            final = max(0, original - removed)
+            with ui.card().classes("w-full p-3").style("background:#14262a;border:1px solid #2dd4bf"):
+                ui.label(f"{_clock(original, brief=True)} → {_clock(final, brief=True)}").classes("text-lg font-bold text-teal-300")
+                ui.label(f"{len(analyzed)} vídeos · {removed:.1f}s removidos · −{100 * removed / original:.1f}%").classes("text-xs text-teal-100")
 
     def rules_from_controls() -> CutRules:
         return replace(load_rules(preset.value), pause_within_sentence_s=round(within.value, 2), pause_after_sentence_s=round(after.value, 2), breath_padding_s=round(breath.value, 2), min_segment_s=round(minimum.value, 2), audio_crossfade_ms=int(crossfade.value), preserve_dramatic_pauses=protect.value, punch_in=punch.value)
@@ -228,11 +249,12 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
 
     def render_review() -> None:
         for box in (player_box, timeline_box, cuts_box, retakes_box, protected_box, transcript_box, result_box): box.clear()
+        render_batch_summary()
         current = item()
         if not current or not current.get("plan"):
             with timeline_box: ui.label("Selecione um vídeo e execute a análise para montar a revisão.").classes("rc-muted text-sm p-12")
             return
-        plan = current["plan"]; disabled = current.setdefault("disabled_cuts", set()); visible = [cut for index, cut in enumerate(plan.cuts) if index not in disabled]
+        plan = current["plan"]; disabled = current.setdefault("disabled_cuts", set()); visible = reviewed_cuts(current)
         removed = sum(cut.end_s - cut.start_s for cut in visible); source_key = _key(current["path"]); MEDIA[source_key] = current["path"]
         preview_cuts = [[cut.start_s, cut.end_s] for cut in visible]
         with player_box:

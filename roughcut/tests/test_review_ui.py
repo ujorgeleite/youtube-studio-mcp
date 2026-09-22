@@ -84,6 +84,8 @@ def test_switching_review_video_preserves_its_cuts_and_rules():
             assert controls['within'].value == 1.25
             selector = select_refs['review_select']
             assert selector.options == {'a.mp4': 'a.mp4', 'b.mp4': 'b.mp4'}
+            texts = [str(getattr(e, 'text', '')) for e in client.elements.values()]
+            assert '2 vídeos · 2.8s removidos · −14.0%' in texts
 
     asyncio.run(exercise())
 

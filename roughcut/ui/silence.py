@@ -14,7 +14,9 @@ from smartcut.cuts import cuts_from_words
 from smartcut.pipeline import analyze_clip, default_output_dir
 from smartcut.preprocess import extract_audio, normalize_loudness
 from smartcut.render import render_with_handles
+from smartcut.schema import Cut
 from .filepicker import choose_directory
+from .review_preview import ReviewPreview
 
 MEDIA: dict[str, str] = {}
 THUMB_DIR = Path(__file__).resolve().parents[1] / ".smartcut-cache" / "thumbnails"
@@ -75,7 +77,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
 .rc-cut-active { outline:1px solid #3b82f6; background:#202f3c; } .rc-chip { border:1px solid #2dd4bf; color:#2dd4bf; border-radius:999px; padding:3px 9px; font-size:11px; }
 .rc-bottom { background:#111a21; border-top:1px solid #2b3a47; }
 </style>""")
-    state = {"files": [], "selected": None, "running": False, "active_cut": None}
+    state = {"files": [], "selected": None, "running": False, "active_cut": None, "syncing_rules": False}
 
     with ui.header().classes("items-center gap-3 px-5").style("height:70px;background:#151b21;border-bottom:1px solid #2b3a47"):
         ui.icon("content_cut", size="md").classes("text-teal-300 rounded p-2").style("background:#164e4a")
@@ -118,6 +120,9 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                     ui.label("■ corte proposto").classes("text-xs text-pink-400")
                     ui.label("■ mantido").classes("text-xs text-teal-300")
                     ui.label("■ pausa protegida").classes("text-xs text-amber-300")
+                review_select = ui.select({}, label="Vídeo analisado").classes("w-full mt-2")
+                review_select.props("dense outlined")
+                review_select.set_visibility(False)
                 player_box = ui.column().classes("w-full")
                 timeline_box = ui.column().classes("w-full")
                 with ui.row().classes("w-full items-center mt-3"):
@@ -149,18 +154,37 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
     def rules_from_controls() -> CutRules:
         return replace(load_rules(preset.value), pause_within_sentence_s=round(within.value, 2), pause_after_sentence_s=round(after.value, 2), breath_padding_s=round(breath.value, 2), min_segment_s=round(minimum.value, 2), audio_crossfade_ms=int(crossfade.value), preserve_dramatic_pauses=protect.value, punch_in=punch.value)
 
+    def set_rules_controls(rules: CutRules) -> None:
+        state["syncing_rules"] = True
+        try:
+            within.set_value(rules.pause_within_sentence_s); after.set_value(rules.pause_after_sentence_s)
+            minimum.set_value(rules.min_segment_s); breath.set_value(rules.breath_padding_s)
+            crossfade.set_value(rules.audio_crossfade_ms); protect.set_value(rules.preserve_dramatic_pauses)
+            punch.set_value(rules.punch_in)
+        finally:
+            state["syncing_rules"] = False
+
     def refresh_plan() -> None:
+        if state["syncing_rules"]:
+            return
         current = item()
         if current and current.get("plan"):
             plan = current["plan"]
-            plan.cuts = cuts_from_words(plan.words, rules_from_controls(), plan.protected_pauses if protect.value else [])
+            rules = rules_from_controls()
+            current["rules"] = rules
+            plan.cuts = cuts_from_words(plan.words, rules, plan.protected_pauses if rules.preserve_dramatic_pauses else [])
+            for retake in plan.retakes:
+                if retake.get("selected"):
+                    plan.cuts.append(Cut(retake["start_s"], retake["end_s"], "retake_repetido", transcript_before=retake["text"], transcript_after=retake["kept_text"]))
+            plan.cuts.sort(key=lambda cut: cut.start_s)
             state["active_cut"] = None; render_review()
 
     def render_rules() -> None:
+        # Preserve live controls before clear() deletes the panel's children.
+        for control in (within, after, minimum, breath, crossfade, protect, punch):
+            control.move()
         rules_box.clear(); rules = load_rules(preset.value)
-        within.set_value(rules.pause_within_sentence_s); after.set_value(rules.pause_after_sentence_s)
-        minimum.set_value(rules.min_segment_s); breath.set_value(rules.breath_padding_s); crossfade.set_value(rules.audio_crossfade_ms)
-        protect.set_value(rules.preserve_dramatic_pauses); punch.set_value(rules.punch_in)
+        set_rules_controls(rules)
         with rules_box:
             for title, control, note in (("Pausa dentro da frase", within, "mantém respiro no diálogo"), ("Pausa após fim de frase", after, "preserva intenção editorial"), ("Trecho mínimo entre cortes", minimum, "abaixo disso os cortes se mesclam"), ("Respiro preservado", breath, "nunca corta no meio da palavra"), ("Crossfade de áudio", crossfade, "suaviza a emenda")):
                 ui.label(title).classes("text-sm"); control.move(rules_box); ui.label(note).classes("text-xs rc-muted")
@@ -183,7 +207,20 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
 
     def select(entry: dict) -> None:
         state["selected"] = entry["path"]; state["active_cut"] = None; active_file.text = entry["name"]
+        if entry.get("plan"):
+            set_rules_controls(entry.get("rules", load_rules(entry["plan"].preset)))
+        review_select.set_value(entry["path"] if entry.get("plan") else None)
         render_files(); render_review()
+
+    def select_review(event) -> None:
+        entry = next((candidate for candidate in state["files"] if candidate["path"] == event.value and candidate.get("plan")), None)
+        if entry:
+            select(entry)
+
+    def refresh_review_selector() -> None:
+        options = {entry["path"]: entry["name"] for entry in state["files"] if entry.get("plan")}
+        review_select.set_options(options, value=state["selected"] if state["selected"] in options else None)
+        review_select.set_visibility(bool(options))
 
     def toggle_cut(current: dict, index: int) -> None:
         disabled = current.setdefault("disabled_cuts", set())
@@ -196,8 +233,10 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
             with timeline_box: ui.label("Selecione um vídeo e execute a análise para montar a revisão.").classes("rc-muted text-sm p-12")
             return
         plan = current["plan"]; disabled = current.setdefault("disabled_cuts", set()); visible = [cut for index, cut in enumerate(plan.cuts) if index not in disabled]
-        removed = sum(cut.end_s - cut.start_s for cut in visible); source_key = _key(current.get("rendered") or current["path"]); MEDIA[source_key] = current.get("rendered") or current["path"]
-        with player_box: ui.video(f"/media/{source_key}").classes("w-full").style("max-height:220px;background:#000")
+        removed = sum(cut.end_s - cut.start_s for cut in visible); source_key = _key(current["path"]); MEDIA[source_key] = current["path"]
+        preview_cuts = [[cut.start_s, cut.end_s] for cut in visible]
+        with player_box:
+            ReviewPreview(f"/media/{source_key}", preview_cuts).classes("w-full")
         with timeline_box: ui.echart(_timeline(plan, current["duration"], state["active_cut"])).classes("w-full").style("height:210px;background:#0d141a;border:1px solid #2b3a47;border-radius:10px")
         cuts_count.text = f"{len(visible)} ativos · {len(disabled)} mantidos"
         with cuts_box:
@@ -250,10 +289,20 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                     audio_dir = Path(output.value) / ".audio"; extracted = await run.io_bound(extract_audio, entry["path"], audio_dir / f"{Path(entry['path']).stem}.m4a")
                     source = await run.io_bound(normalize_loudness, extracted, audio_dir / f"{Path(entry['path']).stem}__lufs.m4a")
                 plan, artifacts = await run.io_bound(analyze_clip, entry["path"], output.value, preset=preset.value, analysis_source=source)
-                entry.update(plan=plan, artifacts=artifacts, disabled_cuts=set()); progress.value = index / len(targets); render_files()
-                if entry["path"] == state["selected"]: render_review()
+                entry.update(plan=plan, artifacts=artifacts, disabled_cuts=set(), rules=load_rules(preset.value)); progress.value = index / len(targets)
+                refresh_review_selector()
+                current = item()
+                if not current or not current.get("plan"):
+                    select(entry)
+                else:
+                    render_files()
+                    if entry["path"] == state["selected"]: render_review()
+            status.text = "Análise concluída. Revise os cortes antes de processar."
+        except Exception as exc:
+            status.text = f"Falha na análise: {exc}"
+            ui.notify(status.text, type="negative", timeout=0)
         finally:
-            state["running"] = False; progress.set_visibility(False); status.text = "Análise concluída. Revise os cortes antes de processar."
+            state["running"] = False; progress.set_visibility(False)
 
     async def process_selected() -> None:
         targets = [entry for entry in state["files"] if entry["selected"] and entry.get("plan")]
@@ -265,8 +314,12 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                 reviewed = replace(entry["plan"], cuts=[cut for i, cut in enumerate(entry["plan"].cuts) if i not in disabled])
                 rendered, _ = await run.io_bound(render_with_handles, reviewed, output.value); entry["rendered"] = str(rendered); progress.value = index / len(targets)
                 if entry["path"] == state["selected"]: render_review()
+            status.text = f"Render concluído em {output.value}"
+        except Exception as exc:
+            status.text = f"Falha na renderização: {exc}"
+            ui.notify(status.text, type="negative", timeout=0)
         finally:
-            state["running"] = False; progress.set_visibility(False); status.text = f"Render concluído em {output.value}"
+            state["running"] = False; progress.set_visibility(False)
 
     async def browse_folder() -> None:
         chosen = await run.io_bound(choose_directory)
@@ -278,5 +331,6 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
 
     for control in (within, after, minimum, breath, crossfade, protect, punch): control.on_value_change(lambda _: refresh_plan())
     preset.on_value_change(lambda _: (render_rules(), refresh_plan()))
+    review_select.on_value_change(select_review)
     browse.on_click(browse_folder); load.on_click(load_files); analyze.on_click(analyze_selected); process.on_click(process_selected)
     all_button.on_click(lambda: set_all(True)); none_button.on_click(lambda: set_all(False)); render_rules()

@@ -134,10 +134,10 @@ def silence_page() -> None:
             with ui.card().classes("flex-grow min-w-0"):
                 inspector = ui.column().classes("w-full")
 
-        with ui.footer().classes("items-center gap-3 px-5"):
-            batch_status = ui.label("Nenhum vídeo selecionado").classes("text-sm flex-grow")
-            ui.button("Analisar", icon="graphic_eq", on_click=lambda: _analyze_selected()).props("outline")
-            ui.button("Processar", icon="content_cut", color="green", on_click=lambda: _process_selected())
+    with ui.footer().classes("items-center gap-3 px-5"):
+        batch_status = ui.label("Nenhum vídeo selecionado").classes("text-sm flex-grow")
+        ui.button("Analisar", icon="graphic_eq", on_click=lambda: _analyze_selected()).props("outline")
+        ui.button("Processar", icon="content_cut", color="green", on_click=lambda: _process_selected())
 
     def _selected() -> list[dict]: return [item for item in state["files"] if item["selected"]]
 

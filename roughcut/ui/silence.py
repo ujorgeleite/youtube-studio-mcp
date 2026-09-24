@@ -169,9 +169,12 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
             original = sum(entry["duration"] for entry in analyzed)
             removed = sum(sum(cut.end_s - cut.start_s for cut in reviewed_cuts(entry)) for entry in analyzed)
             final = max(0, original - removed)
+            rendered = sum(1 for entry in analyzed if entry.get("rendered"))
+            working = [entry for entry in state["files"] if entry.get("stage") in {"Extraindo áudio", "Normalizando áudio", "Detectando fala e transcrevendo", "Renderizando"}]
             with ui.card().classes("w-full p-3").style("background:#14262a;border:1px solid #2dd4bf"):
                 ui.label(f"{_clock(original, brief=True)} → {_clock(final, brief=True)}").classes("text-lg font-bold text-teal-300")
                 ui.label(f"{len(analyzed)} vídeos · {removed:.1f}s removidos · −{100 * removed / original:.1f}%").classes("text-xs text-teal-100")
+                ui.label(f"MP4s: {rendered}/{len(analyzed)} · em andamento: {len(working)}").classes("text-xs rc-muted mt-1")
 
     def rules_from_controls() -> CutRules:
         return replace(load_rules(preset.value), pause_within_sentence_s=round(within.value, 2), pause_after_sentence_s=round(after.value, 2), breath_padding_s=round(breath.value, 2), min_segment_s=round(minimum.value, 2), audio_crossfade_ms=int(crossfade.value), preserve_dramatic_pauses=protect.value, punch_in=punch.value)
@@ -225,7 +228,29 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                         check.on_value_change(lambda event, current=entry: current.update(selected=bool(event.value)))
                         ui.label(entry["name"]).classes("text-xs ellipsis flex-grow")
                     ui.label(_clock(entry["duration"], brief=True)).classes("text-xs rc-muted")
-                    if entry.get("plan"): ui.badge(f"{len(entry['plan'].cuts)} cortes", color="teal").props("dense")
+                    stage = entry.get("stage", "Pronto para analisar")
+                    color = "negative" if stage.startswith("Falhou") else "teal" if stage in {"Cortes prontos", "Concluído"} else "primary" if stage not in {"Pronto para analisar", "Na fila"} else "grey"
+                    ui.badge(stage, color=color).props("dense").classes("text-xs")
+                    if entry.get("plan"):
+                        ui.label(f"{len(entry['plan'].cuts)} cortes propostos").classes("text-xs text-teal-300")
+                    if entry.get("error"):
+                        ui.label(entry["error"]).classes("text-xs text-red-300 ellipsis")
+
+    def set_busy(value: bool) -> None:
+        if value:
+            analyze.disable(); process.disable()
+        else:
+            analyze.enable(); process.enable()
+
+    def set_stage(entry: dict, stage: str, *, index: int | None = None, total: int | None = None, fraction: float = 0.0, error: str | None = None) -> None:
+        entry["stage"] = stage
+        entry["error"] = error
+        if index is not None and total:
+            progress.value = min(1.0, ((index - 1) + fraction) / total)
+        render_files()
+        render_batch_summary()
+        if entry["path"] == state["selected"] and not entry.get("plan"):
+            render_review()
 
     def select(entry: dict) -> None:
         state["selected"] = entry["path"]; state["active_cut"] = None; active_file.text = entry["name"]
@@ -253,7 +278,14 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         render_batch_summary()
         current = item()
         if not current or not current.get("plan"):
-            with timeline_box: ui.label("Selecione um vídeo e execute a análise para montar a revisão.").classes("rc-muted text-sm p-12")
+            stage = current.get("stage") if current else None
+            with timeline_box:
+                if stage and stage != "Pronto para analisar":
+                    ui.spinner("dots", size="lg").classes("text-teal-300 m-5")
+                    ui.label(stage).classes("text-sm font-bold")
+                    ui.label(current.get("error") or "A revisão aparecerá assim que este vídeo terminar.").classes("rc-muted text-sm")
+                else:
+                    ui.label("Selecione um vídeo e execute a análise para montar a revisão.").classes("rc-muted text-sm p-12")
             return
         plan = current["plan"]; disabled = current.setdefault("disabled_cuts", set()); visible = reviewed_cuts(current)
         removed = sum(cut.end_s - cut.start_s for cut in visible); source_key = _key(current["path"]); MEDIA[source_key] = current["path"]
@@ -304,45 +336,77 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
     async def analyze_selected() -> None:
         targets = [entry for entry in state["files"] if entry["selected"]]
         if not targets or state["running"]: return
-        state["running"] = True; progress.set_visibility(True)
+        state["running"] = True; progress.set_visibility(True); set_busy(True)
+        for entry in targets:
+            entry.update(stage="Na fila", error=None)
+        render_files(); render_batch_summary()
+        completed: list[dict] = []
+        failures = 0
         try:
             for index, entry in enumerate(targets, 1):
-                status.text = f"{index}/{len(targets)} · extraindo áudio, VAD e transcrição: {entry['name']}"; source = entry["path"]
-                if normalize.value:
-                    audio_dir = Path(output.value) / ".audio"; extracted = await run.io_bound(extract_audio, entry["path"], audio_dir / f"{Path(entry['path']).stem}.m4a")
-                    source = await run.io_bound(normalize_loudness, extracted, audio_dir / f"{Path(entry['path']).stem}__lufs.m4a")
-                plan, artifacts = await run.io_bound(analyze_clip, entry["path"], output.value, preset=preset.value, analysis_source=source)
-                entry.update(plan=plan, artifacts=artifacts, disabled_cuts=set(), rules=load_rules(preset.value)); progress.value = index / len(targets)
-                refresh_review_selector()
-                render_files()
-                render_batch_summary()
-                # Yield after every completed clip so NiceGUI sends progress and batch metrics now.
+                step_count = 3 if normalize.value else 2
+                try:
+                    status.text = f"{index}/{len(targets)} · extraindo áudio: {entry['name']}"
+                    set_stage(entry, "Extraindo áudio", index=index, total=len(targets), fraction=0.1)
+                    await asyncio.sleep(0)
+                    source = entry["path"]
+                    if normalize.value:
+                        audio_dir = Path(output.value) / ".audio"
+                        extracted = await run.io_bound(extract_audio, entry["path"], audio_dir / f"{Path(entry['path']).stem}.m4a")
+                        status.text = f"{index}/{len(targets)} · normalizando áudio: {entry['name']}"
+                        set_stage(entry, "Normalizando áudio", index=index, total=len(targets), fraction=1 / step_count)
+                        await asyncio.sleep(0)
+                        source = await run.io_bound(normalize_loudness, extracted, audio_dir / f"{Path(entry['path']).stem}__lufs.m4a")
+                    status.text = f"{index}/{len(targets)} · detectando fala e transcrevendo: {entry['name']}"
+                    set_stage(entry, "Detectando fala e transcrevendo", index=index, total=len(targets), fraction=(step_count - 1) / step_count)
+                    await asyncio.sleep(0)
+                    plan, artifacts = await run.io_bound(analyze_clip, entry["path"], output.value, preset=preset.value, analysis_source=source)
+                    entry.update(plan=plan, artifacts=artifacts, disabled_cuts=set(), rules=load_rules(preset.value))
+                    set_stage(entry, "Cortes prontos", index=index, total=len(targets), fraction=1)
+                    refresh_review_selector()
+                    completed.append(entry)
+                except Exception as exc:
+                    failures += 1
+                    status.text = f"{index}/{len(targets)} · falhou: {entry['name']}"
+                    set_stage(entry, "Falhou", index=index, total=len(targets), fraction=1, error=str(exc))
                 await asyncio.sleep(0)
-            # A new batch must become visible even when the previous review already has a plan.
-            select(targets[0])
-            status.text = "Análise concluída. Revise os cortes antes de processar."
-        except Exception as exc:
-            status.text = f"Falha na análise: {exc}"
-            ui.notify(status.text, type="negative", timeout=0)
+            if completed:
+                select(completed[0])
+            status.text = f"Análise concluída: {len(completed)}/{len(targets)} prontos" + (f" · {failures} falharam" if failures else "")
         finally:
-            state["running"] = False; progress.set_visibility(False)
+            state["running"] = False; progress.set_visibility(False); set_busy(False)
 
     async def process_selected() -> None:
         targets = [entry for entry in state["files"] if entry["selected"] and entry.get("plan")]
         if not targets or state["running"]: ui.notify("Analise ao menos um vídeo antes de processar.", type="warning"); return
-        state["running"] = True; progress.set_visibility(True)
+        state["running"] = True; progress.set_visibility(True); set_busy(True)
+        for entry in targets:
+            entry.update(stage="Na fila para renderização", error=None)
+        render_files(); render_batch_summary()
+        completed = 0
+        failures = 0
         try:
             for index, entry in enumerate(targets, 1):
-                status.text = f"{index}/{len(targets)} · renderizando: {entry['name']}"; disabled = entry.get("disabled_cuts", set())
-                reviewed = replace(entry["plan"], cuts=[cut for i, cut in enumerate(entry["plan"].cuts) if i not in disabled])
-                rendered, _ = await run.io_bound(render_with_handles, reviewed, output.value); entry["rendered"] = str(rendered); progress.value = index / len(targets)
-                if entry["path"] == state["selected"]: render_review()
-            status.text = f"Render concluído em {output.value}"
-        except Exception as exc:
-            status.text = f"Falha na renderização: {exc}"
-            ui.notify(status.text, type="negative", timeout=0)
+                try:
+                    status.text = f"{index}/{len(targets)} · renderizando: {entry['name']}"
+                    set_stage(entry, "Renderizando", index=index, total=len(targets), fraction=0.1)
+                    await asyncio.sleep(0)
+                    disabled = entry.get("disabled_cuts", set())
+                    reviewed = replace(entry["plan"], cuts=[cut for i, cut in enumerate(entry["plan"].cuts) if i not in disabled])
+                    rendered, _ = await run.io_bound(render_with_handles, reviewed, output.value)
+                    entry["rendered"] = str(rendered)
+                    completed += 1
+                    set_stage(entry, "Concluído", index=index, total=len(targets), fraction=1)
+                    if entry["path"] == state["selected"]:
+                        render_review()
+                except Exception as exc:
+                    failures += 1
+                    status.text = f"{index}/{len(targets)} · falhou: {entry['name']}"
+                    set_stage(entry, "Falhou", index=index, total=len(targets), fraction=1, error=str(exc))
+                await asyncio.sleep(0)
+            status.text = f"Render concluído: {completed}/{len(targets)} MP4s" + (f" · {failures} falharam" if failures else f" · saída em {output.value}")
         finally:
-            state["running"] = False; progress.set_visibility(False)
+            state["running"] = False; progress.set_visibility(False); set_busy(False)
 
     async def browse_folder() -> None:
         chosen = await run.io_bound(choose_directory)

@@ -50,7 +50,9 @@ def test_analysis_opens_processed_clip_and_populates_review(monkeypatch):
 
             monkeypatch.setattr(silence, 'analyze_clip', fail)
             await callback()
-            assert refs['status'].text == 'Falha na análise: Falha de áudio de teste'
+            assert refs['status'].text == 'Análise concluída: 0/1 prontos · 1 falharam'
+            assert refs['state']['files'][1]['stage'] == 'Falhou'
+            assert refs['state']['files'][1]['error'] == 'Falha de áudio de teste'
             assert not refs['state']['running']
 
     asyncio.run(exercise())
@@ -155,5 +157,46 @@ def test_batch_summary_updates_between_completed_files(monkeypatch):
             assert calls == 2
             texts = [str(getattr(e, 'text', '')) for e in client.elements.values()]
             assert '2 vídeos · 5.6s removidos · −18.7%' in texts
+
+    asyncio.run(exercise())
+
+
+def test_analysis_continues_after_a_file_failure(monkeypatch):
+    async def exercise():
+        async def inline(function, *args, **kwargs):
+            return function(*args, **kwargs)
+
+        plan = CutPlan('good.mp4', 10, 'colab', words=[Word(0, 1, 'pronto')])
+        monkeypatch.setattr(silence.run, 'io_bound', inline)
+        with Client(page('/continue-after-failure-test')) as client:
+            calls = 0
+
+            def analyze(*args, **kwargs):
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    raise RuntimeError('codec inválido')
+                return plan, {'plan': Path('good.json')}
+
+            monkeypatch.setattr(silence, 'analyze_clip', analyze)
+            silence.smartcut_page()
+            button = next(e for e in client.elements.values()
+                          if isinstance(e, ui.button) and e.text == 'Analisar selecionados')
+            callback = inspect.getclosurevars(next(iter(button._event_listeners.values())).handler).nonlocals['callback']
+            refs = inspect.getclosurevars(callback).nonlocals
+            refs['normalize'].value = False
+            refs['output'].value = '/tmp/continue-after-failure-test'
+            refs['state'].update(files=[
+                dict(path='bad.mp4', name='bad.mp4', duration=10, selected=True, thumb_key='bad'),
+                dict(path='good.mp4', name='good.mp4', duration=10, selected=True, thumb_key='good'),
+            ])
+            await callback()
+            bad, good = refs['state']['files']
+            assert bad['stage'] == 'Falhou'
+            assert bad['error'] == 'codec inválido'
+            assert good['stage'] == 'Cortes prontos'
+            assert good['plan'] is plan
+            assert refs['state']['selected'] == 'good.mp4'
+            assert refs['status'].text == 'Análise concluída: 1/2 prontos · 1 falharam'
 
     asyncio.run(exercise())

@@ -5,6 +5,7 @@ import hashlib
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
+from time import perf_counter
 
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
@@ -13,6 +14,7 @@ from nicegui import app, run, ui
 from silence.analyze import extract_thumbnail, list_videos, probe_duration
 from smartcut.config import CutRules, list_presets, load_rules
 from smartcut.cuts import cuts_from_words
+from smartcut.batch_report import TERMINAL_STAGES, build_batch_summary, write_batch_summary
 from smartcut.pipeline import analyze_clip, default_output_dir
 from smartcut.preprocess import PreprocessError, extract_audio, has_audio_stream, normalize_loudness
 from smartcut.render import render_with_handles
@@ -98,8 +100,13 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
 .rc-bottom { background:#111a21; border-top:1px solid #2b3a47; }
 .rc-thumb { transition:filter .45s ease; } .rc-queue { background:#111920; border:1px solid #263746; border-radius:9px; }
 .rc-event { border-left:2px solid #2dd4bf; background:#10181f; } .rc-progress-label { font-variant-numeric:tabular-nums; }
+.rc-report-row { border-left:3px solid #2dd4bf; background:#10181f; border-radius:7px; }
 </style>""")
-    state = {"files": [], "selected": None, "running": False, "active_cut": None, "syncing_rules": False, "events": []}
+    state = {
+        "files": [], "selected": None, "running": False, "active_cut": None,
+        "syncing_rules": False, "events": [], "batch": None, "batch_artifacts": {},
+        "operational_mode": None,
+    }
 
     with ui.header().classes("items-center gap-3 px-5").style("height:70px;background:#151b21;border-bottom:1px solid #2b3a47"):
         ui.icon("content_cut", size="md").classes("text-teal-300 rounded p-2").style("background:#164e4a")
@@ -168,6 +175,9 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
             queue_box = ui.row().classes("w-full gap-2 mt-2")
             activity_box = ui.column().classes("w-full gap-1 mt-2")
             files_box = ui.row().classes("w-full gap-2 mt-2").style("flex-wrap:wrap")
+            ui.separator().classes("my-2")
+            ui.label("RELATÓRIO EM FORMAÇÃO").classes("text-xs font-bold rc-muted")
+            report_box = ui.column().classes("w-full gap-2 mt-2")
     with ui.footer().classes("rc-bottom items-center p-4 gap-3"):
         process = ui.button("▶ Processar selecionados", color="teal").props("no-caps").classes("font-bold")
         status = ui.label("Carregue uma pasta raw para começar.").classes("text-sm rc-muted flex-grow")
@@ -198,6 +208,60 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                 ui.label(f"{_clock(original, brief=True)} → {_clock(final, brief=True)}").classes("text-lg font-bold text-teal-300")
                 ui.label(f"{len(analyzed)} vídeos · {removed:.1f}s removidos · −{100 * removed / original:.1f}%").classes("text-xs text-teal-100")
                 ui.label(f"MP4s: {rendered}/{len(analyzed)} · em andamento: {len(working)}").classes("text-xs rc-muted mt-1")
+            batch = state.get("batch")
+            if batch:
+                elapsed = max(0.0, (datetime.now() - datetime.fromisoformat(batch["started_at"])).total_seconds())
+                ui.label(f"Processamento deste lote: {_clock(elapsed, brief=True)} · {batch['mode']}").classes("text-xs text-amber-200")
+
+    def batch_entries() -> list[dict]:
+        batch = state.get("batch") or {}
+        targets = set(batch.get("targets", []))
+        return [entry for entry in state["files"] if entry["path"] in targets]
+
+    def persist_batch_summary() -> dict | None:
+        batch = state.get("batch")
+        if not batch or not output.value:
+            return None
+        summary = build_batch_summary(batch, state["files"])
+        state["batch_artifacts"] = write_batch_summary(output.value, summary)
+        return summary
+
+    def render_report() -> None:
+        report_box.clear()
+        batch = state.get("batch")
+        if not batch:
+            with report_box:
+                ui.label("O relatório aparece à medida que os vídeos terminam.").classes("text-xs rc-muted")
+            return
+        summary = build_batch_summary(batch, state["files"])
+        with report_box:
+            duration = summary["duration"]
+            videos = summary["videos"]
+            ui.label(f"{videos['completed']} concluídos · {videos['failed']} falhas · {videos['without_audio']} sem áudio · {videos['in_progress']} em andamento").classes("text-xs text-teal-200")
+            ui.label(f"Tempo investido: {_clock(summary['elapsed_s'], brief=True)} · vídeo removido: {_clock(duration['removed_s'], brief=True)}").classes("text-xs rc-muted")
+            for row in reversed(summary["rows"]):
+                if row["status"] not in TERMINAL_STAGES:
+                    continue
+                with ui.row().classes("rc-report-row w-full items-center gap-2 px-2 py-1"):
+                    ui.label(row["name"]).classes("text-xs flex-grow ellipsis")
+                    ui.label(row["status"]).classes("text-xs text-teal-200" if row["status"] == "Concluído" else "text-amber-200" if row["status"] == "Sem áudio — ignorado" else "text-red-300")
+                    ui.label(f"{row['removed_s']:.1f}s removidos").classes("text-xs rc-muted")
+                    ui.label(f"{row['render_s'] or row['analysis_s']:.1f}s").classes("text-xs rc-muted")
+            artifacts = state.get("batch_artifacts", {})
+            if artifacts:
+                ui.label(f"✓ resumo: {artifacts['markdown'].name} · {artifacts['json'].name}").classes("text-xs text-teal-300")
+
+    def start_batch(mode: str, targets: list[dict]) -> None:
+        now = datetime.now()
+        state["batch"] = {
+            "id": now.strftime("%Y%m%d-%H%M%S"), "mode": mode,
+            "started_at": now.isoformat(), "targets": [entry["path"] for entry in targets],
+        }
+        state["batch_artifacts"] = {}
+        for entry in targets:
+            entry.pop("completed_at", None)
+            entry.pop("analysis_elapsed_s", None)
+            entry.pop("render_elapsed_s", None)
 
     def rules_from_controls() -> CutRules:
         return replace(load_rules(preset.value), pause_within_sentence_s=round(within.value, 2), pause_after_sentence_s=round(after.value, 2), breath_padding_s=round(breath.value, 2), min_segment_s=round(minimum.value, 2), audio_crossfade_ms=int(crossfade.value), preserve_dramatic_pauses=protect.value, punch_in=punch.value)
@@ -242,7 +306,17 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         render_queue()
         files_box.clear()
         with files_box:
-            for entry in state["files"]:
+            entries = state["files"]
+            batch = state.get("batch") or {}
+            if state.get("operational_mode") == "render":
+                targets = set(batch.get("targets", []))
+                entries = [
+                    entry for entry in entries
+                    if entry["path"] in targets and entry.get("stage") not in TERMINAL_STAGES
+                ]
+            if not entries and state.get("operational_mode") == "render":
+                ui.label("Nenhum vídeo aguardando renderização. Consulte o relatório em formação abaixo.").classes("text-sm rc-muted p-3")
+            for entry in entries:
                 selected_class = "border border-blue-500" if entry["path"] == state["selected"] else ""
                 with ui.card().classes(f"rc-card w-48 p-2 {selected_class}"):
                     percent = int(entry.get("progress", 0))
@@ -298,8 +372,12 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         del state["events"][12:]
         if index is not None and total:
             progress.value = min(1.0, ((index - 1) + fraction) / total)
+        if stage in TERMINAL_STAGES:
+            entry["completed_at"] = datetime.now().isoformat(timespec="seconds")
+            persist_batch_summary()
         render_files()
         render_batch_summary()
+        render_report()
         if entry["path"] == state["selected"] and not entry.get("plan"):
             render_review()
 
@@ -388,9 +466,11 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         targets = [entry for entry in state["files"] if entry["selected"]]
         if not targets or state["running"]: return
         state["running"] = True; progress.set_visibility(True); set_busy(True)
+        state["operational_mode"] = None
+        start_batch("análise", targets)
         for entry in targets:
             entry.update(stage="Na fila", error=None)
-        render_files(); render_batch_summary()
+        render_files(); render_batch_summary(); render_report()
         completed: list[dict] = []
         failures = 0
         skipped = 0
@@ -398,6 +478,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
             for index, entry in enumerate(targets, 1):
                 step_count = 3 if normalize.value else 2
                 try:
+                    entry_started = perf_counter()
                     status.text = f"{index}/{len(targets)} · extraindo áudio: {entry['name']}"
                     set_stage(entry, "Extraindo áudio", index=index, total=len(targets), fraction=0.1)
                     await asyncio.sleep(0)
@@ -406,6 +487,8 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                         skipped += 1
                         set_stage(entry, "Sem áudio — ignorado", index=index, total=len(targets), fraction=1,
                                   error="Este vídeo não possui trilha de áudio para analisar.")
+                        entry["analysis_elapsed_s"] = perf_counter() - entry_started
+                        persist_batch_summary(); render_report()
                         status.text = f"{index}/{len(targets)} · ignorado sem áudio: {entry['name']}"
                         continue
                     if normalize.value:
@@ -420,11 +503,13 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                     await asyncio.sleep(0)
                     plan, artifacts = await run.io_bound(analyze_clip, entry["path"], output.value, preset=preset.value, analysis_source=source)
                     entry.update(plan=plan, artifacts=artifacts, disabled_cuts=set(), rules=load_rules(preset.value))
+                    entry["analysis_elapsed_s"] = perf_counter() - entry_started
                     set_stage(entry, "Cortes prontos", index=index, total=len(targets), fraction=1)
                     refresh_review_selector()
                     completed.append(entry)
                 except Exception as exc:
                     failures += 1
+                    entry["analysis_elapsed_s"] = perf_counter() - entry_started
                     status.text = f"{index}/{len(targets)} · falhou: {entry['name']}"
                     set_stage(entry, "Falhou", index=index, total=len(targets), fraction=1, error=_friendly_error(exc))
                 await asyncio.sleep(0)
@@ -438,14 +523,17 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         targets = [entry for entry in state["files"] if entry["selected"] and entry.get("plan")]
         if not targets or state["running"]: ui.notify("Analise ao menos um vídeo antes de processar.", type="warning"); return
         state["running"] = True; progress.set_visibility(True); set_busy(True)
+        state["operational_mode"] = "render"
+        start_batch("renderização", targets)
         for entry in targets:
             entry.update(stage="Na fila para renderização", error=None)
-        render_files(); render_batch_summary()
+        render_files(); render_batch_summary(); persist_batch_summary(); render_report()
         completed = 0
         failures = 0
         try:
             for index, entry in enumerate(targets, 1):
                 try:
+                    entry_started = perf_counter()
                     status.text = f"{index}/{len(targets)} · renderizando: {entry['name']}"
                     set_stage(entry, "Renderizando", index=index, total=len(targets), fraction=0.1)
                     await asyncio.sleep(0)
@@ -453,12 +541,14 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                     reviewed = replace(entry["plan"], cuts=[cut for i, cut in enumerate(entry["plan"].cuts) if i not in disabled])
                     rendered, _ = await run.io_bound(render_with_handles, reviewed, output.value)
                     entry["rendered"] = str(rendered)
+                    entry["render_elapsed_s"] = perf_counter() - entry_started
                     completed += 1
                     set_stage(entry, "Concluído", index=index, total=len(targets), fraction=1)
                     if entry["path"] == state["selected"]:
                         render_review()
                 except Exception as exc:
                     failures += 1
+                    entry["render_elapsed_s"] = perf_counter() - entry_started
                     status.text = f"{index}/{len(targets)} · falhou: {entry['name']}"
                     set_stage(entry, "Falhou", index=index, total=len(targets), fraction=1, error=_friendly_error(exc))
                 await asyncio.sleep(0)
@@ -470,6 +560,13 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         chosen = await run.io_bound(choose_directory)
         if chosen: folder.value = chosen; await load_files()
 
+    def refresh_live_batch() -> None:
+        """Atualiza cronômetro, cartões e o arquivo do relatório sem esperar o próximo vídeo."""
+        if state["running"] and state.get("batch"):
+            persist_batch_summary()
+            render_batch_summary()
+            render_report()
+
     def set_all(value: bool) -> None:
         for entry in state["files"]: entry["selected"] = value
         render_files()
@@ -479,3 +576,4 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
     review_select.on_value_change(select_review)
     browse.on_click(browse_folder); load.on_click(load_files); analyze.on_click(analyze_selected); process.on_click(process_selected)
     all_button.on_click(lambda: set_all(True)); none_button.on_click(lambda: set_all(False)); render_rules()
+    ui.timer(1.0, refresh_live_batch)

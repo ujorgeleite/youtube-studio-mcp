@@ -133,6 +133,13 @@ raw__corte-inteligente/
 Vídeos sem trilha de áudio aparecem como **Sem áudio — ignorado** na fila. Eles
 não interrompem os outros arquivos, pois não há fala ou silêncio para analisar.
 
+Durante a renderização, a grade mostra somente os vídeos selecionados que ainda
+estão em andamento. Cada vídeo concluído, ignorado ou que falhar entra
+imediatamente em **Relatório em formação**, abaixo da grade. O relatório é
+atualizado a cada segundo e salvo em `reports/<lote>__summary.json` e
+`reports/<lote>__summary.md`; ele consolida duração original e final, cortes,
+tempo de análise/renderização e os artefatos gerados por vídeo.
+
 DeepFilterNet permanece opcional: a distribuição atual precisa de Rust/Cargo
 para compilar no Python 3.14. A normalização `loudnorm` em duas passadas já está
 disponível na interface.

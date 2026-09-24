@@ -236,3 +236,36 @@ def test_video_without_audio_is_skipped_with_a_clear_status(monkeypatch):
 
 def test_friendly_error_hides_ffmpeg_trace_details():
     assert silence._friendly_error(RuntimeError('Error opening output files: Invalid argument\n/path/file.m4a')) == 'O ffmpeg não conseguiu criar o áudio temporário deste vídeo.'
+
+
+def test_render_batch_moves_completed_selected_videos_to_incremental_report(monkeypatch, tmp_path):
+    async def exercise():
+        async def inline(function, *args, **kwargs):
+            return function(*args, **kwargs)
+
+        first_plan = CutPlan('one.mp4', 10, 'colab', cuts=[Cut(1, 3, 'pausa_na_frase')])
+        second_plan = CutPlan('two.mp4', 10, 'colab', cuts=[Cut(4, 5, 'pausa_na_frase')])
+        monkeypatch.setattr(silence.run, 'io_bound', inline)
+        monkeypatch.setattr(silence, 'render_with_handles', lambda plan, output: (tmp_path / f'processed_{Path(plan.source).stem}.mp4', tmp_path / 'plan.json'))
+        with Client(page('/incremental-report-test')) as client:
+            silence.smartcut_page()
+            button = next(e for e in client.elements.values() if isinstance(e, ui.button) and e.text == '▶ Processar selecionados')
+            callback = inspect.getclosurevars(next(iter(button._event_listeners.values())).handler).nonlocals['callback']
+            refs = inspect.getclosurevars(callback).nonlocals
+            refs['output'].value = str(tmp_path)
+            refs['state'].update(files=[
+                dict(path='one.mp4', name='one.mp4', duration=10, selected=True, thumb_key='one', plan=first_plan, artifacts={}, disabled_cuts=set()),
+                dict(path='two.mp4', name='two.mp4', duration=10, selected=True, thumb_key='two', plan=second_plan, artifacts={}, disabled_cuts=set()),
+                dict(path='not-selected.mp4', name='not-selected.mp4', duration=10, selected=False, thumb_key='other'),
+            ])
+            await callback()
+            assert refs['state']['operational_mode'] == 'render'
+            assert all(entry['stage'] == 'Concluído' for entry in refs['state']['files'][:2])
+            assert refs['state']['files'][2].get('stage') is None
+            report = refs['state']['batch_artifacts']['json']
+            assert report.is_file()
+            contents = report.read_text(encoding='utf-8')
+            assert 'one.mp4' in contents and 'two.mp4' in contents
+            assert 'not-selected.mp4' not in contents
+
+    asyncio.run(exercise())

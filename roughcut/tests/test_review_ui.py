@@ -118,3 +118,42 @@ def test_new_analysis_batch_replaces_an_already_open_review(monkeypatch):
             assert '1 ativos · 0 mantidos' in texts
 
     asyncio.run(exercise())
+
+
+def test_batch_summary_updates_between_completed_files(monkeypatch):
+    async def exercise():
+        async def inline(function, *args, **kwargs):
+            return function(*args, **kwargs)
+
+        first_plan = CutPlan('one.mp4', 10, 'colab', words=[Word(0, 1, 'um'), Word(3, 4, 'dois')], cuts=[Cut(1.1, 2.9, 'pausa_na_frase')])
+        second_plan = CutPlan('two.mp4', 20, 'colab', words=[Word(0, 1, 'três'), Word(5, 6, 'quatro')], cuts=[Cut(1.1, 4.9, 'pausa_na_frase')])
+        monkeypatch.setattr(silence.run, 'io_bound', inline)
+        with Client(page('/batch-progress-test')) as client:
+            calls = 0
+
+            def analyze(*args, **kwargs):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    texts = [str(getattr(e, 'text', '')) for e in client.elements.values()]
+                    assert '1 vídeos · 1.8s removidos · −18.0%' in texts
+                return (first_plan if calls == 1 else second_plan), {'plan': Path(f'{calls}.json')}
+
+            monkeypatch.setattr(silence, 'analyze_clip', analyze)
+            silence.smartcut_page()
+            button = next(e for e in client.elements.values()
+                          if isinstance(e, ui.button) and e.text == 'Analisar selecionados')
+            callback = inspect.getclosurevars(next(iter(button._event_listeners.values())).handler).nonlocals['callback']
+            refs = inspect.getclosurevars(callback).nonlocals
+            refs['normalize'].value = False
+            refs['output'].value = '/tmp/batch-progress-test'
+            refs['state'].update(files=[
+                dict(path='one.mp4', name='one.mp4', duration=10, selected=True, thumb_key='one'),
+                dict(path='two.mp4', name='two.mp4', duration=20, selected=True, thumb_key='two'),
+            ])
+            await callback()
+            assert calls == 2
+            texts = [str(getattr(e, 'text', '')) for e in client.elements.values()]
+            assert '2 vídeos · 5.6s removidos · −18.7%' in texts
+
+    asyncio.run(exercise())

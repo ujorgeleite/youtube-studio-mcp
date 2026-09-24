@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from dataclasses import replace
 from pathlib import Path
@@ -314,6 +315,9 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                 entry.update(plan=plan, artifacts=artifacts, disabled_cuts=set(), rules=load_rules(preset.value)); progress.value = index / len(targets)
                 refresh_review_selector()
                 render_files()
+                render_batch_summary()
+                # Yield after every completed clip so NiceGUI sends progress and batch metrics now.
+                await asyncio.sleep(0)
             # A new batch must become visible even when the previous review already has a plan.
             select(targets[0])
             status.text = "Análise concluída. Revise os cortes antes de processar."

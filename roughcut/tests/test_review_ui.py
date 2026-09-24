@@ -227,6 +227,8 @@ def test_video_without_audio_is_skipped_with_a_clear_status(monkeypatch):
             entry = refs['state']['files'][0]
             assert entry['stage'] == 'Sem áudio — ignorado'
             assert entry['error'] == 'Este vídeo não possui trilha de áudio para analisar.'
+            assert entry['progress'] == 10
+            assert refs['state']['events'][0]['stage'] == 'Sem áudio — ignorado'
             assert refs['status'].text == 'Análise concluída: 0/1 prontos · 1 sem áudio'
 
     asyncio.run(exercise())

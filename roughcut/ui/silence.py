@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -95,8 +96,10 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
 .rc-muted { color:#94a3b8; } .rc-cut { border-left:3px solid #fb7185; background:#1a2530; border-radius:8px; }
 .rc-cut-active { outline:1px solid #3b82f6; background:#202f3c; } .rc-chip { border:1px solid #2dd4bf; color:#2dd4bf; border-radius:999px; padding:3px 9px; font-size:11px; }
 .rc-bottom { background:#111a21; border-top:1px solid #2b3a47; }
+.rc-thumb { transition:filter .45s ease; } .rc-queue { background:#111920; border:1px solid #263746; border-radius:9px; }
+.rc-event { border-left:2px solid #2dd4bf; background:#10181f; } .rc-progress-label { font-variant-numeric:tabular-nums; }
 </style>""")
-    state = {"files": [], "selected": None, "running": False, "active_cut": None, "syncing_rules": False}
+    state = {"files": [], "selected": None, "running": False, "active_cut": None, "syncing_rules": False, "events": []}
 
     with ui.header().classes("items-center gap-3 px-5").style("height:70px;background:#151b21;border-bottom:1px solid #2b3a47"):
         ui.icon("content_cut", size="md").classes("text-teal-300 rounded p-2").style("background:#164e4a")
@@ -162,6 +165,8 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                 ui.label("Arquivos brutos").classes("font-bold flex-grow")
                 all_button = ui.button("Selecionar todos").props("flat dense no-caps")
                 none_button = ui.button("Limpar").props("flat dense no-caps")
+            queue_box = ui.row().classes("w-full gap-2 mt-2")
+            activity_box = ui.column().classes("w-full gap-1 mt-2")
             files_box = ui.row().classes("w-full gap-2 mt-2").style("flex-wrap:wrap")
     with ui.footer().classes("rc-bottom items-center p-4 gap-3"):
         process = ui.button("▶ Processar selecionados", color="teal").props("no-caps").classes("font-bold")
@@ -234,18 +239,24 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
             protect.move(rules_box); punch.move(rules_box)
 
     def render_files() -> None:
+        render_queue()
         files_box.clear()
         with files_box:
             for entry in state["files"]:
                 selected_class = "border border-blue-500" if entry["path"] == state["selected"] else ""
                 with ui.card().classes(f"rc-card w-48 p-2 {selected_class}"):
-                    image = ui.image(f"/media/{entry['thumb_key']}").classes("w-full rounded bg-black cursor-pointer"); image.style("height:96px;object-fit:cover")
+                    percent = int(entry.get("progress", 0))
+                    image = ui.image(f"/media/{entry['thumb_key']}").classes("rc-thumb w-full rounded bg-black cursor-pointer")
+                    image.style(f"height:96px;object-fit:cover;filter:grayscale({100 - percent}%);")
                     image.on("click", lambda _, current=entry: select(current))
                     with ui.row().classes("w-full items-center no-wrap"):
                         check = ui.checkbox(value=entry["selected"]).props("dense")
                         check.on_value_change(lambda event, current=entry: current.update(selected=bool(event.value)))
                         ui.label(entry["name"]).classes("text-xs ellipsis flex-grow")
                     ui.label(_clock(entry["duration"], brief=True)).classes("text-xs rc-muted")
+                    with ui.row().classes("w-full items-center gap-1"):
+                        ui.linear_progress(value=percent / 100).props("rounded color=teal track-color=blue-grey-9").classes("flex-grow")
+                        ui.label(f"{percent}%").classes("rc-progress-label text-xs rc-muted")
                     stage = entry.get("stage", "Pronto para analisar")
                     color = "negative" if stage.startswith("Falhou") else "teal" if stage in {"Cortes prontos", "Concluído"} else "primary" if stage not in {"Pronto para analisar", "Na fila"} else "grey"
                     ui.badge(stage, color=color).props("dense").classes("text-xs")
@@ -253,6 +264,25 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                         ui.label(f"{len(entry['plan'].cuts)} cortes propostos").classes("text-xs text-teal-300")
                     if entry.get("error"):
                         ui.label(entry["error"]).classes("text-xs text-red-300 ellipsis")
+
+    def render_queue() -> None:
+        queue_box.clear(); activity_box.clear()
+        stages = [entry.get("stage", "Pronto para analisar") for entry in state["files"]]
+        queued = sum(stage in {"Na fila", "Na fila para renderização"} for stage in stages)
+        working = sum(stage in {"Extraindo áudio", "Normalizando áudio", "Detectando fala e transcrevendo", "Renderizando"} for stage in stages)
+        ready = sum(stage in {"Cortes prontos", "Concluído"} for stage in stages)
+        failed = sum(stage == "Falhou" for stage in stages)
+        with queue_box:
+            for label, value, color in (("na fila", queued, "text-slate-300"), ("trabalhando", working, "text-blue-300"), ("prontos", ready, "text-teal-300"), ("falhas", failed, "text-red-300")):
+                with ui.card().classes("rc-queue flex-grow p-2"):
+                    ui.label(str(value)).classes(f"text-lg font-bold {color}")
+                    ui.label(label).classes("text-xs rc-muted")
+        with activity_box:
+            for event in state["events"][:5]:
+                with ui.row().classes("rc-event w-full items-center gap-2 px-2 py-1"):
+                    ui.label(event["time"]).classes("text-xs rc-muted")
+                    ui.label(event["name"]).classes("text-xs flex-grow ellipsis")
+                    ui.label(event["stage"]).classes("text-xs text-teal-200")
 
     def set_busy(value: bool) -> None:
         if value:
@@ -263,6 +293,9 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
     def set_stage(entry: dict, stage: str, *, index: int | None = None, total: int | None = None, fraction: float = 0.0, error: str | None = None) -> None:
         entry["stage"] = stage
         entry["error"] = error
+        entry["progress"] = round(100 * (entry.get("progress", 0) / 100 if error else fraction))
+        state["events"].insert(0, {"time": datetime.now().strftime("%H:%M:%S"), "name": entry["name"], "stage": stage})
+        del state["events"][12:]
         if index is not None and total:
             progress.value = min(1.0, ((index - 1) + fraction) / total)
         render_files()

@@ -26,4 +26,5 @@ mostrar o efeito prático do trabalho realizado.
   manter suas informações acessíveis no relatório em formação. A tela principal
   fica focada somente nos itens ainda em análise ou renderização.
 
-Status: planejado; não implementado nesta etapa.
+Status: implementado na interface e em `smartcut/batch_report.py`. Uma futura
+evolução pode adicionar estimativa configurável de tempo humano de edição.

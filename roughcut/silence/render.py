@@ -45,7 +45,8 @@ def render_plan(
 
     destination = Path(output_dir).expanduser().resolve()
     destination.mkdir(parents=True, exist_ok=True)
-    output = destination / f"{source.stem}__sem-silencios.mp4"
+    output_prefix = str(plan.get("render_options", {}).get("output_prefix", ""))
+    output = destination / f"{output_prefix}{source.stem}__sem-silencios.mp4"
     removed_s = max(0.0, float(plan.get("duration_s", 0)) - sum(item.duration_s for item in keeps))
     options = plan.get("render_options", {})
     removed_pct = 100 * removed_s / float(plan.get("duration_s", 1) or 1)

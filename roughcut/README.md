@@ -116,9 +116,22 @@ make smartcut INPUT=/caminho/para/raw FORMAT=colab
 ```
 
 Os presets ficam em `config/presets.yaml`; o glossário de nomes e expressões
-fica em `config/glossario.yaml`. A pasta irmã `raw__corte-inteligente/` contém
-JSON fonte de verdade, SRT, relatório de revisão, FCPXML apontando ao original
-e uma pasta `.cache/` que evita reexecutar VAD ou transcrição ao ajustar regras.
+fica em `config/glossario.yaml`. A pasta irmã `raw__corte-inteligente/` organiza
+os resultados por tipo:
+
+```text
+raw__corte-inteligente/
+├── videos/     # processed_<video>__sem-silencios.mp4
+├── subtitles/  # SRT
+├── timelines/  # FCPXML apontando ao original
+├── reports/    # revisão em Markdown
+├── plans/      # JSON da análise, room tone e plano de render
+├── .audio/     # temporários de normalização
+└── .cache/     # VAD e transcrição para reprocessar sem usar modelos de novo
+```
+
+Vídeos sem trilha de áudio aparecem como **Sem áudio — ignorado** na fila. Eles
+não interrompem os outros arquivos, pois não há fala ou silêncio para analisar.
 
 DeepFilterNet permanece opcional: a distribuição atual precisa de Rust/Cargo
 para compilar no Python 3.14. A normalização `loudnorm` em duas passadas já está

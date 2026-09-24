@@ -21,10 +21,16 @@ def keep_intervals(plan: CutPlan) -> list[dict[str, float]]:
 
 def render_with_handles(plan: CutPlan, output_dir: str | Path, on_progress=None):
     """MP4 de revisão com cortes precisos; JSON do plano permanece a fonte de verdade."""
+    root = Path(output_dir)
     payload = {
         "source": plan.source,
         "duration_s": plan.duration_s,
         "keep": keep_intervals(plan),
-        "render_options": {"always_render": True},
+        "render_options": {"always_render": True, "output_prefix": "processed_"},
     }
-    return render_plan(payload, output_dir, on_progress)
+    output, render_plan_path = render_plan(payload, root / "videos", on_progress)
+    plans_dir = root / "plans"
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    final_plan_path = plans_dir / render_plan_path.name
+    render_plan_path.replace(final_plan_path)
+    return output, final_plan_path

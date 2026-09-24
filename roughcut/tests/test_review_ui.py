@@ -21,6 +21,7 @@ def test_analysis_opens_processed_clip_and_populates_review(monkeypatch):
                        words=[Word(0, 1, 'Olá'), Word(3, 4, 'mundo')],
                        cuts=[Cut(1.1, 2.9, 'pausa_na_frase')])
         monkeypatch.setattr(silence.run, 'io_bound', inline)
+        monkeypatch.setattr(silence, 'has_audio_stream', lambda _: True)
         monkeypatch.setattr(silence, 'analyze_clip', lambda *a, **k: (plan, {'plan': Path('review.json')}))
         with Client(page('/review-test')) as client:
             silence.smartcut_page()
@@ -100,6 +101,7 @@ def test_new_analysis_batch_replaces_an_already_open_review(monkeypatch):
         old_plan = CutPlan('old.mp4', 10, 'colab', words=[Word(0, 1, 'velho')])
         new_plan = CutPlan('new.mp4', 10, 'colab', words=[Word(0, 1, 'novo'), Word(3, 4, 'vídeo')], cuts=[Cut(1.1, 2.9, 'pausa_na_frase')])
         monkeypatch.setattr(silence.run, 'io_bound', inline)
+        monkeypatch.setattr(silence, 'has_audio_stream', lambda _: True)
         monkeypatch.setattr(silence, 'analyze_clip', lambda *a, **k: (new_plan, {'plan': Path('new.json')}))
         with Client(page('/new-batch-test')) as client:
             silence.smartcut_page()
@@ -130,6 +132,7 @@ def test_batch_summary_updates_between_completed_files(monkeypatch):
         first_plan = CutPlan('one.mp4', 10, 'colab', words=[Word(0, 1, 'um'), Word(3, 4, 'dois')], cuts=[Cut(1.1, 2.9, 'pausa_na_frase')])
         second_plan = CutPlan('two.mp4', 20, 'colab', words=[Word(0, 1, 'três'), Word(5, 6, 'quatro')], cuts=[Cut(1.1, 4.9, 'pausa_na_frase')])
         monkeypatch.setattr(silence.run, 'io_bound', inline)
+        monkeypatch.setattr(silence, 'has_audio_stream', lambda _: True)
         with Client(page('/batch-progress-test')) as client:
             calls = 0
 
@@ -168,6 +171,7 @@ def test_analysis_continues_after_a_file_failure(monkeypatch):
 
         plan = CutPlan('good.mp4', 10, 'colab', words=[Word(0, 1, 'pronto')])
         monkeypatch.setattr(silence.run, 'io_bound', inline)
+        monkeypatch.setattr(silence, 'has_audio_stream', lambda _: True)
         with Client(page('/continue-after-failure-test')) as client:
             calls = 0
 
@@ -200,3 +204,33 @@ def test_analysis_continues_after_a_file_failure(monkeypatch):
             assert refs['status'].text == 'Análise concluída: 1/2 prontos · 1 falharam'
 
     asyncio.run(exercise())
+
+
+def test_video_without_audio_is_skipped_with_a_clear_status(monkeypatch):
+    async def exercise():
+        async def inline(function, *args, **kwargs):
+            return function(*args, **kwargs)
+
+        monkeypatch.setattr(silence.run, 'io_bound', inline)
+        monkeypatch.setattr(silence, 'has_audio_stream', lambda _: False)
+        monkeypatch.setattr(silence, 'analyze_clip', lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('must not transcribe')))
+        with Client(page('/without-audio-test')) as client:
+            silence.smartcut_page()
+            button = next(e for e in client.elements.values()
+                          if isinstance(e, ui.button) and e.text == 'Analisar selecionados')
+            callback = inspect.getclosurevars(next(iter(button._event_listeners.values())).handler).nonlocals['callback']
+            refs = inspect.getclosurevars(callback).nonlocals
+            refs['normalize'].value = False
+            refs['output'].value = '/tmp/without-audio-test'
+            refs['state'].update(files=[dict(path='silent.mp4', name='silent.mp4', duration=10, selected=True, thumb_key='silent')])
+            await callback()
+            entry = refs['state']['files'][0]
+            assert entry['stage'] == 'Sem áudio — ignorado'
+            assert entry['error'] == 'Este vídeo não possui trilha de áudio para analisar.'
+            assert refs['status'].text == 'Análise concluída: 0/1 prontos · 1 sem áudio'
+
+    asyncio.run(exercise())
+
+
+def test_friendly_error_hides_ffmpeg_trace_details():
+    assert silence._friendly_error(RuntimeError('Error opening output files: Invalid argument\n/path/file.m4a')) == 'O ffmpeg não conseguiu criar o áudio temporário deste vídeo.'

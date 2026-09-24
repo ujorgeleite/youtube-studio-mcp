@@ -16,7 +16,21 @@ def _run(args: list[str]) -> subprocess.CompletedProcess:
     return result
 
 
+def has_audio_stream(source: str | Path) -> bool:
+    """Return whether the source has an audio stream before asking ffmpeg to extract it."""
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(source)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise PreprocessError(result.stderr.strip() or "ffprobe falhou")
+    return bool(result.stdout.strip())
+
+
 def extract_audio(source: str | Path, destination: str | Path) -> Path:
+    if not has_audio_stream(source):
+        raise PreprocessError("vídeo não contém uma trilha de áudio")
     target = Path(destination)
     target.parent.mkdir(parents=True, exist_ok=True)
     _run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(source), "-vn", "-ac", "1", "-ar", "48000", str(target)])

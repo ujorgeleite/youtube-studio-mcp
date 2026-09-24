@@ -15,6 +15,10 @@ def test_pipeline_reuses_vad_and_transcript_cache(tmp_path, monkeypatch):
     plan, artifacts = analyze_clip(source, out)
     assert len(plan.cuts) == 1
     assert all(path.is_file() for path in artifacts.values())
+    assert artifacts["plan"].parent.name == "plans"
+    assert artifacts["srt"].parent.name == "subtitles"
+    assert artifacts["report"].parent.name == "reports"
+    assert artifacts["fcpxml"].parent.name == "timelines"
 
     monkeypatch.setattr("smartcut.pipeline.speech_regions", lambda _: (_ for _ in ()).throw(AssertionError()))
     monkeypatch.setattr("smartcut.pipeline.transcribe_words", lambda _: (_ for _ in ()).throw(AssertionError()))

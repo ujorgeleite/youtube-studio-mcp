@@ -64,12 +64,14 @@ def analyze_clip(
             cuts.append(Cut(retake["start_s"], retake["end_s"], "retake_repetido", transcript_before=retake["text"], transcript_after=retake["kept_text"]))
     plan = CutPlan(str(source), duration, preset, words, sorted(cuts, key=lambda cut: cut.start_s), protected, retakes)
     artifacts = {
-        "plan": root / f"{source.stem}__corte.json",
-        "srt": root / f"{source.stem}__fala-cortada.srt",
-        "report": root / f"{source.stem}__revisao.md",
-        "fcpxml": root / f"{source.stem}__timeline.fcpxml",
-        "room_tone": root / f"{source.stem}__room-tone.json",
+        "plan": root / "plans" / f"{source.stem}__corte.json",
+        "srt": root / "subtitles" / f"{source.stem}__fala-cortada.srt",
+        "report": root / "reports" / f"{source.stem}__revisao.md",
+        "fcpxml": root / "timelines" / f"{source.stem}__timeline.fcpxml",
+        "room_tone": root / "plans" / f"{source.stem}__room-tone.json",
     }
+    for artifact in artifacts.values():
+        artifact.parent.mkdir(parents=True, exist_ok=True)
     artifacts["plan"].write_text(json.dumps(plan.as_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
     write_srt(words, plan.cuts, artifacts["srt"])
     write_review_report(plan.cuts, retakes, artifacts["report"])

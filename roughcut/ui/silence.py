@@ -13,7 +13,7 @@ from silence.analyze import extract_thumbnail, list_videos, probe_duration
 from smartcut.config import CutRules, list_presets, load_rules
 from smartcut.cuts import cuts_from_words
 from smartcut.pipeline import analyze_clip, default_output_dir
-from smartcut.preprocess import extract_audio, normalize_loudness
+from smartcut.preprocess import PreprocessError, extract_audio, has_audio_stream, normalize_loudness
 from smartcut.render import render_with_handles
 from smartcut.schema import Cut
 from .filepicker import choose_directory
@@ -45,6 +45,24 @@ def _context(plan, cut) -> str:
     before = [word.text for word in plan.words if cut.start_s - 3 <= word.end_s <= cut.start_s]
     after = [word.text for word in plan.words if cut.end_s <= word.start_s <= cut.end_s + 3]
     return f"…{' '.join(before[-5:])}  ···  {' '.join(after[:5])}…"
+
+
+def _friendly_error(error: Exception) -> str:
+    """Keep operational errors useful without exposing a full ffmpeg trace in the UI."""
+    detail = str(error).strip()
+    lowered = detail.lower()
+    if "does not contain any stream" in lowered or "não contém uma trilha de áudio" in lowered:
+        return "Este vídeo não possui uma trilha de áudio utilizável."
+    if "invalid argument" in lowered and ("m4a" in lowered or "output" in lowered):
+        return "O ffmpeg não conseguiu criar o áudio temporário deste vídeo."
+    if "ffmpeg não encontrado" in lowered:
+        return "O ffmpeg não está instalado ou não está disponível no PATH."
+    if "no such file" in lowered or "not found" in lowered:
+        return "O arquivo de origem não foi encontrado."
+    if isinstance(error, PreprocessError):
+        return "Não foi possível preparar o áudio deste vídeo."
+    first_line = next((line.strip() for line in detail.splitlines() if line.strip()), "Erro desconhecido")
+    return first_line[:180]
 
 
 def _timeline(plan, duration: float, active_cut: int | None) -> dict:
@@ -342,6 +360,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         render_files(); render_batch_summary()
         completed: list[dict] = []
         failures = 0
+        skipped = 0
         try:
             for index, entry in enumerate(targets, 1):
                 step_count = 3 if normalize.value else 2
@@ -350,6 +369,12 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                     set_stage(entry, "Extraindo áudio", index=index, total=len(targets), fraction=0.1)
                     await asyncio.sleep(0)
                     source = entry["path"]
+                    if not await run.io_bound(has_audio_stream, source):
+                        skipped += 1
+                        set_stage(entry, "Sem áudio — ignorado", index=index, total=len(targets), fraction=1,
+                                  error="Este vídeo não possui trilha de áudio para analisar.")
+                        status.text = f"{index}/{len(targets)} · ignorado sem áudio: {entry['name']}"
+                        continue
                     if normalize.value:
                         audio_dir = Path(output.value) / ".audio"
                         extracted = await run.io_bound(extract_audio, entry["path"], audio_dir / f"{Path(entry['path']).stem}.m4a")
@@ -368,11 +393,11 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                 except Exception as exc:
                     failures += 1
                     status.text = f"{index}/{len(targets)} · falhou: {entry['name']}"
-                    set_stage(entry, "Falhou", index=index, total=len(targets), fraction=1, error=str(exc))
+                    set_stage(entry, "Falhou", index=index, total=len(targets), fraction=1, error=_friendly_error(exc))
                 await asyncio.sleep(0)
             if completed:
                 select(completed[0])
-            status.text = f"Análise concluída: {len(completed)}/{len(targets)} prontos" + (f" · {failures} falharam" if failures else "")
+            status.text = f"Análise concluída: {len(completed)}/{len(targets)} prontos" + (f" · {skipped} sem áudio" if skipped else "") + (f" · {failures} falharam" if failures else "")
         finally:
             state["running"] = False; progress.set_visibility(False); set_busy(False)
 
@@ -402,7 +427,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                 except Exception as exc:
                     failures += 1
                     status.text = f"{index}/{len(targets)} · falhou: {entry['name']}"
-                    set_stage(entry, "Falhou", index=index, total=len(targets), fraction=1, error=str(exc))
+                    set_stage(entry, "Falhou", index=index, total=len(targets), fraction=1, error=_friendly_error(exc))
                 await asyncio.sleep(0)
             status.text = f"Render concluído: {completed}/{len(targets)} MP4s" + (f" · {failures} falharam" if failures else f" · saída em {output.value}")
         finally:

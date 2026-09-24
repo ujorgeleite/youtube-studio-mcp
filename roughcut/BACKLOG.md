@@ -19,5 +19,11 @@ mostrar o efeito prático do trabalho realizado.
 - Oferecer um relatório visual ao término, com links para os vídeos, timelines,
   legendas e relatórios gerados.
 - Salvar uma cópia estruturada do resumo em `reports/` para consulta posterior.
+- Construir o relatório de forma incremental: quando cada vídeo terminar, criar
+  imediatamente sua linha no relatório com status, durações, cortes e links de
+  saída disponíveis.
+- Retirar da lista operacional os vídeos concluídos, ignorados ou com falha e
+  manter suas informações acessíveis no relatório em formação. A tela principal
+  fica focada somente nos itens ainda em análise ou renderização.
 
 Status: planejado; não implementado nesta etapa.

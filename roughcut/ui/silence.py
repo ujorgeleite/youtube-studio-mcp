@@ -101,6 +101,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
 .rc-thumb { transition:filter .45s ease; } .rc-queue { background:#111920; border:1px solid #263746; border-radius:9px; }
 .rc-event { border-left:2px solid #2dd4bf; background:#10181f; } .rc-progress-label { font-variant-numeric:tabular-nums; }
 .rc-report-row { border-left:3px solid #2dd4bf; background:#10181f; border-radius:7px; }
+.rc-processing-clock { font-variant-numeric:tabular-nums; letter-spacing:.04em; text-shadow:0 0 28px rgba(45,212,191,.28); }
 </style>""")
     state = {
         "files": [], "selected": None, "running": False, "active_cut": None,
@@ -133,7 +134,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
             load = ui.button("Carregar vídeos", icon="video_library").props("no-caps outline")
             output = ui.input("Saída").classes("w-80")
         with ui.row().classes("w-full gap-3 items-stretch").style("flex-wrap:nowrap; min-height:640px"):
-            with ui.card().classes("rc-card w-1/4 min-w-72 p-4"):
+            with ui.card().classes("rc-card w-1/4 min-w-72 p-4") as rules_panel:
                 ui.label("Regras de corte").classes("font-bold")
                 ui.label("preset · ajuste fino antes de processar").classes("text-xs rc-muted")
                 rules_box = ui.column().classes("w-full gap-3 mt-3")
@@ -143,7 +144,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                 normalize = ui.checkbox("Normalizar para -14 LUFS", value=True).classes("text-sm")
                 ui.separator()
                 analyze = ui.button("Analisar selecionados", icon="graphic_eq", color="primary").props("no-caps").classes("w-full")
-            with ui.card().classes("rc-card flex-grow min-w-0 p-4"):
+            with ui.card().classes("rc-card flex-grow min-w-0 p-4") as review_panel:
                 with ui.row().classes("w-full items-center"):
                     ui.label("Timeline de revisão").classes("font-bold flex-grow")
                     ui.label("■ corte proposto").classes("text-xs text-pink-400")
@@ -167,6 +168,14 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                 batch_box = ui.column().classes("w-full gap-2 mt-3")
                 ui.separator()
                 result_box = ui.column().classes("w-full gap-3 mt-3")
+            with ui.card().classes("rc-card flex-grow min-w-0 p-8 items-center justify-center") as processing_panel:
+                ui.icon("movie_filter", size="3rem").classes("text-teal-300")
+                ui.label("PROCESSANDO LOTE").classes("text-sm font-bold tracking-widest text-teal-200 mt-3")
+                processing_clock = ui.label("00:00:00").classes("rc-processing-clock text-6xl font-bold text-teal-300 mt-2")
+                processing_status = ui.label("Preparando renderização…").classes("text-base rc-muted mt-3")
+                processing_details = ui.label("").classes("text-sm text-teal-100 mt-1")
+                processing_bar = ui.linear_progress(value=0).props("rounded color=teal track-color=blue-grey-9").classes("w-4/5 mt-5")
+            processing_panel.set_visibility(False)
         with ui.card().classes("rc-card w-full p-3"):
             with ui.row().classes("w-full items-center"):
                 ui.label("Arquivos brutos").classes("font-bold flex-grow")
@@ -212,6 +221,24 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
             if batch:
                 elapsed = max(0.0, (datetime.now() - datetime.fromisoformat(batch["started_at"])).total_seconds())
                 ui.label(f"Processamento deste lote: {_clock(elapsed, brief=True)} · {batch['mode']}").classes("text-xs text-amber-200")
+
+    def set_processing_layout(active: bool) -> None:
+        rules_panel.set_visibility(not active)
+        review_panel.set_visibility(not active)
+        processing_panel.set_visibility(active)
+
+    def render_processing_center() -> None:
+        batch = state.get("batch")
+        if not batch or state.get("operational_mode") != "render":
+            return
+        summary = build_batch_summary(batch, state["files"])
+        videos = summary["videos"]
+        duration = summary["duration"]
+        finished = videos["completed"] + videos["failed"] + videos["without_audio"]
+        processing_clock.text = _clock(summary["elapsed_s"])
+        processing_status.text = f"{finished}/{videos['total']} vídeos finalizados"
+        processing_details.text = f"{_clock(duration['removed_s'], brief=True)} de vídeo removido · {videos['in_progress']} em andamento"
+        processing_bar.value = min(1.0, finished / max(1, videos["total"]))
 
     def batch_entries() -> list[dict]:
         batch = state.get("batch") or {}
@@ -378,6 +405,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         render_files()
         render_batch_summary()
         render_report()
+        render_processing_center()
         if entry["path"] == state["selected"] and not entry.get("plan"):
             render_review()
 
@@ -460,6 +488,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
             if not thumb.is_file(): await run.io_bound(extract_thumbnail, path, thumb, duration_s=duration)
             MEDIA[_key(str(thumb))] = str(thumb); result.append({"path": str(path), "name": path.name, "duration": duration, "selected": True, "thumb_key": _key(str(thumb))})
         state.update(files=result, selected=result[0]["path"] if result else None); output.value = str(default_output_dir(folder.value)); active_file.text = result[0]["name"] if result else "Nenhum vídeo encontrado"
+        state["operational_mode"] = None; set_processing_layout(False)
         render_files(); render_review()
 
     async def analyze_selected() -> None:
@@ -467,6 +496,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         if not targets or state["running"]: return
         state["running"] = True; progress.set_visibility(True); set_busy(True)
         state["operational_mode"] = None
+        set_processing_layout(False)
         start_batch("análise", targets)
         for entry in targets:
             entry.update(stage="Na fila", error=None)
@@ -524,6 +554,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         if not targets or state["running"]: ui.notify("Analise ao menos um vídeo antes de processar.", type="warning"); return
         state["running"] = True; progress.set_visibility(True); set_busy(True)
         state["operational_mode"] = "render"
+        set_processing_layout(True)
         start_batch("renderização", targets)
         for entry in targets:
             entry.update(stage="Na fila para renderização", error=None)
@@ -566,6 +597,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
             persist_batch_summary()
             render_batch_summary()
             render_report()
+            render_processing_center()
 
     def set_all(value: bool) -> None:
         for entry in state["files"]: entry["selected"] = value

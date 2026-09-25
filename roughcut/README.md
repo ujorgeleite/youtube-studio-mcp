@@ -1,13 +1,105 @@
-# roughcut
+# Roughcut
 
-Pipeline de **pré-montagem** de vídeo. Recebe uma pasta de clipes brutos e um
-formato, e cospe um **stringout** (MP4 pré-montado) mais uma crítica da ordenação.
+Ferramenta local para preparar vídeos antes da edição. O fluxo principal é o
+**removedor inteligente de silêncios**: analisa fala, propõe cortes revisáveis e
+gera cópias MP4 prontas para importar no editor.
 
 > **Projeto isolado.** Vive num monorepo ao lado de um MCP server, mas não
 > compartilha venv, dependências nem imports com ele. A única coisa em comum é o
 > `.git` da raiz. Nada aqui importa código do MCP.
 
-## Os 3 passos
+## Rodar o removedor de silêncios
+
+Este é o roteiro para uma pessoa nova testar a interface.
+
+### 1. Pré-requisitos
+
+- **macOS com Apple Silicon (M1, M2, M3 ou M4)**. A análise de fala usa
+  `mlx-whisper` e foi validada nesse ambiente.
+- **Python 3.10 ou superior**. Confirme com `python3 --version`.
+- **ffmpeg e ffprobe** instalados no sistema. No macOS com Homebrew:
+
+  ```bash
+  brew install ffmpeg
+  ffmpeg -version
+  ffprobe -version
+  ```
+
+- Internet na primeira análise: o modelo local de Whisper é baixado uma vez e
+  fica em cache. Reserve espaço livre em disco para ele e para os MP4s gerados.
+
+### 2. Instalação
+
+Abra o Terminal na raiz do repositório e execute:
+
+```bash
+cd roughcut
+make install
+make doctor
+```
+
+`make install` cria `roughcut/.venv` e instala somente as dependências deste
+projeto. `make doctor` confirma `ffmpeg`, `ffprobe` e os imports de Python antes
+de abrir a interface.
+
+### 3. Abrir a interface
+
+```bash
+cd roughcut
+make silence-ui
+```
+
+Mantenha esse terminal aberto e acesse [http://localhost:8080](http://localhost:8080).
+
+### 4. Processar um lote
+
+1. Clique em **Escolher pasta** e selecione a pasta `raw` com os vídeos.
+2. Clique em **Carregar vídeos**. As miniaturas confirmam os arquivos lidos.
+3. Marque somente os vídeos desejados e clique em **Analisar selecionados**.
+   A primeira execução pode levar mais tempo por baixar o modelo.
+4. Selecione cada vídeo no campo **Vídeo analisado**, revise a timeline e use
+   **Remover** ou **Restaurar** em cada corte proposto.
+5. Escolha **2 em paralelo** para o uso normal. Tente **3 em paralelo** se o
+   Mac tiver folga; volte para 2 se ele ficar pesado.
+6. Clique em **Processar selecionados**. A tela troca para execução do lote,
+   com cronômetro, progresso e relatório por vídeo.
+
+### 5. Encontrar os resultados
+
+Nada sobrescreve a pasta raw. Para uma origem chamada `raw`, a ferramenta cria
+uma pasta irmã chamada `raw__corte-inteligente/`:
+
+```text
+raw__corte-inteligente/
+├── videos/       # MP4s: processed_<origem>__sem-silencios.mp4
+├── reports/      # resumo do lote e revisão em Markdown
+├── subtitles/    # SRT da fala mantida
+├── timelines/    # FCPXML apontando ao vídeo original
+├── plans/        # JSON dos cortes
+├── .audio/       # temporários
+└── .cache/       # VAD e transcrição reutilizáveis
+```
+
+O painel **Relatório em formação** mostra, para cada vídeo, cortes aplicados,
+duração removida, duração antes/depois, tempo de render e eventuais erros.
+
+### Solução rápida de problemas
+
+| Situação | Ação |
+|---|---|
+| `ffmpeg não encontrado` | Rode `brew install ffmpeg`, feche e reabra o Terminal, depois execute `make doctor`. |
+| A página não abre | Confirme que `make silence-ui` continua rodando e abra `http://localhost:8080`. |
+| Vídeo marcado como sem áudio | O arquivo não possui uma trilha de áudio utilizável; ele é ignorado e os demais continuam. |
+| A análise demora no primeiro vídeo | Aguarde o download e carregamento inicial do modelo Whisper. As próximas análises reutilizam o cache. |
+| O Mac fica pesado | Altere **Renderização** de 3 para 2 ou 1 por vez antes de processar. |
+
+## Outros fluxos do projeto
+
+Além do removedor, o projeto mantém o pipeline de **pré-montagem**: recebe
+clipes e um formato editorial, e produz um stringout MP4 com uma crítica de
+ordenação.
+
+### Os 3 passos
 
 | Passo | Módulo | Determinístico? | Testado? |
 |------|--------|-----------------|----------|
@@ -18,29 +110,10 @@ formato, e cospe um **stringout** (MP4 pré-montado) mais uma crítica da ordena
 A **qualidade** da ordenação (passo 2) NÃO é coberta por teste — é o passo do LLM,
 não-determinístico. Você valida rodando de verdade num vídeo.
 
-## Pré-requisitos
+### Executar a pré-montagem
 
-- **ffmpeg** instalado no sistema (não é pacote pip):
-
-  ```bash
-  ffmpeg -version   # confirme que está instalado
-  brew install ffmpeg   # macOS, se faltar
-  ```
-
-- Python 3.10+ e um venv **próprio desta pasta**.
-
-## Setup
-
-```bash
-cd roughcut
-python -m venv .venv
-.venv/bin/pip install -r requirements.txt
-```
-
-Para o passo 2 (LLM), configure as credenciais da Anthropic (`ANTHROPIC_API_KEY`
-ou `ant auth login`).
-
-## Uso
+Para o passo de ordenação por LLM, configure `ANTHROPIC_API_KEY` ou execute
+`ant auth login` antes de rodar o pipeline.
 
 ```bash
 # pipeline completo
@@ -54,103 +127,6 @@ ou `ant auth login`).
 ```
 
 Flags: `--input`, `--format`, `--output`, `--dry-run`, `--cut-list`, `--model-size`.
-
-## Interface de revisão
-
-A ferramenta de remoção inteligente usa apenas NiceGUI. Ela abre uma tela de
-revisão com regras à esquerda, timeline e cortes ao centro, e resultado à direita.
-
-```bash
-make silence-ui
-```
-
-## Remover silêncios
-
-Ela recebe uma pasta com vídeos raw, usa Silero VAD e MLX Whisper para gerar
-cortes entre palavras e mostra os cortes propostos para revisão antes do render.
-
-```bash
-make silence-ui
-# depois abra http://localhost:8080
-```
-
-Existem três políticas por vídeo:
-
-- **Limpar ao redor dos diálogos:** detecta vários blocos de diálogo no mesmo
-  arquivo, remove os espaços antes, depois e entre blocos, e preserva pausas
-  naturais dentro de cada bloco.
-- **Remover todos os silêncios:** mantém cada ilha de fala com pequenas margens.
-- **Remoção cautelosa:** preserva pausas curtas e reduz pausas longas para uma
-  duração mínima, evitando cortes secos no meio da fala.
-
-O processamento nunca altera os arquivos raw. Por padrão, cria uma pasta irmã:
-
-```text
-<nome-da-pasta-raw>__remocao-de-silencios_<data>/
-├── video__sem-silencios.mp4
-└── video__plano-silencios.json
-```
-
-O JSON registra os silêncios encontrados, blocos de diálogo, parâmetros e
-intervalos mantidos. A análise e o corte usam `ffmpeg`/`ffprobe`; não chamam LLM.
-
-A tela usa uma lista compacta com filtros, indicadores de ganho e um painel de
-inspeção do vídeo selecionado. A análise e a renderização podem rodar em
-paralelo, com limite configurável. Quando houver um proxy DJI `.LRF` com áudio e
-duração compatível, ele é usado para análise, waveform e miniatura; o render
-final sempre usa o `.MP4` original.
-
-Quando a remoção total não atingir os limites definidos na tela, o vídeo é
-copiado para a pasta de resultado sem reencodificação. Marque **Sempre
-renderizar** para ignorar essa decisão.
-
-## Corte inteligente por fala/frase
-
-O novo fluxo usa Silero VAD para mapear fala, `mlx-whisper` com
-`large-v3-turbo` e timestamps por palavra, e regras que só cortam entre
-palavras. Ele mantém respiro, preserva pausas configuradas e detecta retakes
-consecutivos, mantendo o último take.
-
-```bash
-make smartcut INPUT=/caminho/para/raw FORMAT=colab
-```
-
-Os presets ficam em `config/presets.yaml`; o glossário de nomes e expressões
-fica em `config/glossario.yaml`. A pasta irmã `raw__corte-inteligente/` organiza
-os resultados por tipo:
-
-```text
-raw__corte-inteligente/
-├── videos/     # processed_<video>__sem-silencios.mp4
-├── subtitles/  # SRT
-├── timelines/  # FCPXML apontando ao original
-├── reports/    # revisão em Markdown
-├── plans/      # JSON da análise, room tone e plano de render
-├── .audio/     # temporários de normalização
-└── .cache/     # VAD e transcrição para reprocessar sem usar modelos de novo
-```
-
-Vídeos sem trilha de áudio aparecem como **Sem áudio — ignorado** na fila. Eles
-não interrompem os outros arquivos, pois não há fala ou silêncio para analisar.
-
-Durante a renderização, a grade mostra somente os vídeos selecionados que ainda
-estão em andamento. Cada vídeo concluído, ignorado ou que falhar entra
-imediatamente em **Relatório em formação**, abaixo da grade. O relatório é
-atualizado a cada segundo e salvo em `reports/<lote>__summary.json` e
-`reports/<lote>__summary.md`; ele consolida duração original e final, cortes,
-tempo de análise/renderização e os artefatos gerados por vídeo.
-
-A renderização permite **1, 2 ou 3 vídeos em paralelo**; o padrão é 2. Use 3
-quando a máquina tiver margem de CPU, memória e armazenamento. Cada vídeo ainda
-mantém seu próprio status e pode falhar sem interromper os demais.
-
-No macOS, quando o ffmpeg tiver `h264_videotoolbox`, os MP4s usam o encoder de
-hardware da Apple. Em outros sistemas, ou sem esse encoder, o render usa
-`libx264` com preset `ultrafast`.
-
-DeepFilterNet permanece opcional: a distribuição atual precisa de Rust/Cargo
-para compilar no Python 3.14. A normalização `loudnorm` em duas passadas já está
-disponível na interface.
 
 ## Runs (logs ricos para IA)
 

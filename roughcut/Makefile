@@ -7,7 +7,7 @@ FORMAT  ?= qualidade-de-vida
 OUTPUT  ?= ./stringout.mp4
 
 .DEFAULT_GOAL := help
-.PHONY: help install test test-verbose test-silence smartcut silence-ui check-ffmpeg lint clean
+.PHONY: help install doctor test test-verbose test-silence smartcut silence-ui check-ffmpeg lint clean
 
 help: ## List available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -18,6 +18,10 @@ $(PYTHON):
 
 install: $(PYTHON) ## Create the venv and install dependencies
 	$(PIP) install -q -r requirements.txt
+
+doctor: check-ffmpeg ## Verify Python dependencies and system binaries
+	$(PYTHON) -c "import fastapi, mlx_whisper, nicegui, numpy, torch; from silero_vad import load_silero_vad; print('Dependências Python prontas.')"
+	@echo "Roughcut pronto para iniciar com: make silence-ui"
 
 test: ## Run the tests (no LLM, no Whisper)
 	$(PYTHON) -m pytest -q

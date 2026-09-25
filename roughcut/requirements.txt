@@ -1,8 +1,19 @@
-faster-whisper
-mlx-whisper
-silero-vad
-rapidfuzz
-pyyaml
-anthropic
-nicegui
-pytest
+# Interface e servidor local
+nicegui==3.17.0
+fastapi==0.141.1
+
+# Análise local de fala e áudio
+mlx-whisper==0.4.3
+silero-vad==6.2.2
+numpy==2.5.3
+torch==2.9.1
+torchaudio==2.9.1
+rapidfuzz==3.14.6
+
+# Pipeline legado de pré-montagem
+faster-whisper==1.2.1
+pyyaml==6.0.3
+anthropic==1.6.0
+
+# Testes
+pytest==9.1.1

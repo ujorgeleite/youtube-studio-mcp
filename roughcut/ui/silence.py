@@ -105,6 +105,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
 .rc-metric { min-width:145px; border-radius:10px; } .rc-report-complete { border-color:#2dd4bf; background:#102724; } .rc-report-failed { border-color:#fb7185; background:#2a1820; } .rc-report-skipped { border-color:#fbbf24; background:#2a2415; }
 .rc-source-bar { background:linear-gradient(100deg,#14212b,#15282a); border:1px solid #36515c; border-radius:14px; } .rc-step { color:#2dd4bf; font-size:11px; font-weight:700; letter-spacing:.08em; }
 .rc-source-input .q-field__control { background:#0e161c; border-radius:9px; } .rc-source-input .q-field__label { color:#9fb3c8; }
+.rc-help-tooltip { max-width:330px; background:#0d171d !important; border:1px solid #2dd4bf; border-radius:10px; box-shadow:0 14px 36px rgba(0,0,0,.42); }
 </style>""")
     state = {
         "files": [], "selected": None, "running": False, "active_cut": None,
@@ -356,47 +357,36 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
             set_rules_controls(load_rules(preset.value))
             return
         explanations = {
-            "Pausa dentro da frase": (
-                "Define o menor silêncio entre duas palavras da mesma frase que vira candidato a corte. "
-                "Diminuir encontra mais pausas e cria mais cortes; aumentar preserva mais respiro."
-            ),
-            "Pausa após fim de frase": (
-                "Define o menor silêncio depois de ., !, ? ou … que será reduzido. O valor também é o respiro "
-                "mantido nessa transição. Diminuir deixa a fala mais ágil; aumentar preserva cadência entre frases."
-            ),
-            "Trecho mínimo entre cortes": (
-                "Impede cortes muito próximos. Se o trecho de vídeo mantido antes do próximo corte for menor que este valor, "
-                "o segundo corte é descartado. Aumentar reduz emendas rápidas."
-            ),
-            "Respiro preservado": (
-                "Em pausas dentro da mesma frase, mantém metade deste tempo antes e metade depois da emenda. "
-                "Aumentar deixa a fala mais natural, mas remove menos vídeo."
-            ),
-            "Crossfade de áudio": (
-                "O valor é salvo junto das regras para o plano de edição. O render atual ainda concatena áudio sem crossfade, "
-                "portanto mudar este controle não altera o MP4 nesta versão."
-            ),
-            "Proteger pausas dramáticas": (
-                "Quando a análise marcar uma pausa como protegida, ela não será cortada. Desligar permite cortar essas pausas. "
-                "A análise atual ainda não marca pausas dramáticas automaticamente em todos os vídeos."
-            ),
-            "Disfarce de jump cut": (
-                "Reserva a regra para aplicar variação visual nas emendas. Ela ainda não é aplicada pelo render atual, "
-                "portanto mudar este controle não altera o MP4 nesta versão."
-            ),
+            "Pausa dentro da frase": ("Efeito no corte", "Define o menor silêncio entre duas palavras da mesma frase que pode virar corte.", "Menor = mais cortes · Maior = mais respiro."),
+            "Pausa após fim de frase": ("Efeito no corte", "Define o silêncio mínimo depois de ., !, ? ou … que será reduzido e o respiro que fica nessa transição.", "Menor = fala mais ágil · Maior = mais cadência."),
+            "Trecho mínimo entre cortes": ("Proteção de ritmo", "Descarta um corte se o trecho mantido antes dele ficar curto demais.", "Maior = menos emendas rápidas."),
+            "Respiro preservado": ("Naturalidade da fala", "Em uma pausa dentro da frase, mantém metade deste tempo antes e metade depois da emenda.", "Maior = fala mais natural, mas menos vídeo removido."),
+            "Crossfade de áudio": ("Estado atual", "O valor é salvo no plano, mas o render ainda concatena áudio sem crossfade.", "Nesta versão, mudar este ajuste não altera o MP4."),
+            "Proteger pausas dramáticas": ("Proteção editorial", "Impede cortes em pausas marcadas como protegidas; desligar permite cortá-las.", "A análise ainda não marca todas as pausas dramáticas automaticamente."),
+            "Disfarce de jump cut": ("Estado atual", "Reserva uma regra para variar visualmente as emendas.", "Nesta versão, mudar este ajuste não altera o MP4."),
         }
+
+        def info_icon(title: str) -> None:
+            heading, effect, tip = explanations[title]
+            icon = ui.icon("info_outline", size="16px").classes("text-teal-300 cursor-help")
+            with icon:
+                with ui.tooltip().classes("rc-help-tooltip p-3"):
+                    ui.label(title).classes("text-sm font-bold text-teal-200")
+                    ui.label(heading.upper()).classes("text-xs font-bold text-slate-400 mt-2")
+                    ui.label(effect).classes("text-sm leading-5 mt-1")
+                    ui.label(tip).classes("text-xs text-amber-200 mt-2")
         with rules_box:
             for title, control, note in (("Pausa dentro da frase", within, "mantém respiro no diálogo"), ("Pausa após fim de frase", after, "preserva intenção editorial"), ("Trecho mínimo entre cortes", minimum, "abaixo disso os cortes se mesclam"), ("Respiro preservado", breath, "nunca corta no meio da palavra"), ("Crossfade de áudio", crossfade, "suaviza a emenda")):
                 with ui.row().classes("w-full items-center gap-1"):
                     ui.label(title).classes("text-sm")
-                    ui.icon("info_outline", size="16px").classes("text-teal-300 cursor-help").tooltip(explanations[title])
+                    info_icon(title)
                 control.move(rules_box); ui.label(note).classes("text-xs rc-muted")
             with ui.row().classes("w-full items-center gap-1"):
                 protect.move()
-                ui.icon("info_outline", size="16px").classes("text-teal-300 cursor-help").tooltip(explanations["Proteger pausas dramáticas"])
+                info_icon("Proteger pausas dramáticas")
             with ui.row().classes("w-full items-center gap-1"):
                 punch.move()
-                ui.icon("info_outline", size="16px").classes("text-teal-300 cursor-help").tooltip(explanations["Disfarce de jump cut"])
+                info_icon("Disfarce de jump cut")
         state["rules_mounted"] = True
         set_rules_controls(load_rules(preset.value))
 

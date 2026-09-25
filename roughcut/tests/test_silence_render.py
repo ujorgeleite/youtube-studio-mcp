@@ -5,6 +5,7 @@ import subprocess
 
 import pytest
 
+from silence import render
 from silence.render import default_output_dir, render_plan
 from tests.fixtures.make_clips import make_clips
 
@@ -62,3 +63,15 @@ def test_render_plan_copies_original_when_removal_is_not_relevant(tmp_path):
 
     assert output.read_bytes() == (tmp_path / "raw" / "C01.mp4").read_bytes()
     assert json.loads(plan_path.read_text())["render"]["strategy"] == "copy_original"
+
+
+def test_render_prefers_macos_hardware_encoder_when_ffmpeg_supports_it(monkeypatch):
+    class Result:
+        stdout = " V....D h264_videotoolbox VideoToolbox H.264 Encoder"
+
+    render._video_encoder_args.cache_clear()
+    monkeypatch.setattr(render.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(render.subprocess, "run", lambda *args, **kwargs: Result())
+
+    assert render._video_encoder_args()[:2] == ["-c:v", "h264_videotoolbox"]
+    render._video_encoder_args.cache_clear()

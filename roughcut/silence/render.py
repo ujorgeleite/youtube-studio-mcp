@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import platform
 import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 
 from .schema import Interval
@@ -27,6 +29,20 @@ def _run(args: list[str]) -> None:
     proc = subprocess.run(args, capture_output=True, text=True)
     if proc.returncode != 0:
         raise SilenceRenderError(proc.stderr.strip() or "ffmpeg falhou")
+
+
+@lru_cache
+def _video_encoder_args() -> list[str]:
+    """Prefere o encoder de hardware nativo do macOS, com fallback portátil."""
+    if platform.system() == "Darwin":
+        available = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True, check=False
+        ).stdout
+        if "h264_videotoolbox" in available:
+            # A escala/fps já são definidos pelo filtro. A taxa mantém qualidade
+            # adequada para importar no editor sem consumir CPU no x264.
+            return ["-c:v", "h264_videotoolbox", "-b:v", "10M", "-maxrate", "12M", "-pix_fmt", "yuv420p"]
+    return ["-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p"]
 
 
 def render_plan(
@@ -83,7 +99,7 @@ def render_plan(
             [
                 "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(source),
                 "-filter_complex", ";".join(filters), "-map", "[v]", "-map", "[a]",
-                "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac",
+                *_video_encoder_args(), "-c:a", "aac",
                 "-ar", "44100", "-ac", "2", output,
             ]
         )

@@ -103,11 +103,13 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
 .rc-report-row { border-left:3px solid #2dd4bf; background:#10181f; border-radius:7px; }
 .rc-processing-clock { font-variant-numeric:tabular-nums; letter-spacing:.04em; text-shadow:0 0 28px rgba(45,212,191,.28); }
 .rc-metric { min-width:145px; border-radius:10px; } .rc-report-complete { border-color:#2dd4bf; background:#102724; } .rc-report-failed { border-color:#fb7185; background:#2a1820; } .rc-report-skipped { border-color:#fbbf24; background:#2a2415; }
+.rc-source-bar { background:linear-gradient(100deg,#14212b,#15282a); border:1px solid #36515c; border-radius:14px; } .rc-step { color:#2dd4bf; font-size:11px; font-weight:700; letter-spacing:.08em; }
+.rc-source-input .q-field__control { background:#0e161c; border-radius:9px; } .rc-source-input .q-field__label { color:#9fb3c8; }
 </style>""")
     state = {
         "files": [], "selected": None, "running": False, "active_cut": None,
         "syncing_rules": False, "events": [], "batch": None, "batch_artifacts": {},
-        "operational_mode": None,
+        "operational_mode": None, "rules_mounted": False,
     }
 
     with ui.header().classes("items-center gap-3 px-5").style("height:70px;background:#151b21;border-bottom:1px solid #2b3a47"):
@@ -129,11 +131,20 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
     punch = ui.switch("Disfarce de jump cut", value=False).props("color=teal")
 
     with ui.column().classes("w-full gap-3 p-4"):
-        with ui.row().classes("w-full items-end gap-2"):
-            folder = ui.input("Pasta raw").classes("flex-grow")
-            browse = ui.button(icon="folder_open").props("outline round")
-            load = ui.button("Carregar vídeos", icon="video_library").props("no-caps outline")
-            output = ui.input("Saída").classes("w-80")
+        with ui.card().classes("rc-source-bar w-full p-3"):
+            with ui.row().classes("w-full items-center gap-3").style("flex-wrap:wrap"):
+                ui.icon("folder_copy", size="md").classes("text-teal-300 rounded p-2").style("background:#164e4a")
+                with ui.column().classes("gap-0 min-w-44"):
+                    ui.label("ORIGEM DO LOTE").classes("rc-step")
+                    ui.label("Escolha a pasta raw para começar").classes("text-sm font-bold")
+                folder = ui.input("1 · Pasta raw", placeholder="/caminho/para/raw").classes("rc-source-input flex-grow min-w-80")
+                browse = ui.button("Escolher pasta", icon="folder_open").props("no-caps outline").classes("text-sm")
+                load = ui.button("2 · Carregar vídeos", icon="video_library", color="primary").props("no-caps").classes("font-bold")
+                ui.separator().props("vertical").classes("h-12")
+                with ui.column().classes("gap-0 min-w-36"):
+                    ui.label("DESTINO").classes("rc-step")
+                    ui.label("saída organizada").classes("text-xs rc-muted")
+                output = ui.input("3 · Pasta de saída", placeholder="gerada ao carregar vídeos").classes("rc-source-input flex-grow min-w-80")
         with ui.row().classes("w-full gap-3 items-stretch").style("flex-wrap:nowrap; min-height:640px"):
             with ui.card().classes("rc-card w-1/4 min-w-72 p-4") as rules_panel:
                 ui.label("Regras de corte").classes("font-bold")
@@ -340,15 +351,16 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
             state["active_cut"] = None; render_review()
 
     def render_rules() -> None:
-        # Preserve live controls before clear() deletes the panel's children.
-        for control in (within, after, minimum, breath, crossfade, protect, punch):
-            control.move()
-        rules_box.clear(); rules = load_rules(preset.value)
-        set_rules_controls(rules)
+        """Monta os controles uma vez; depois apenas troca os valores do preset."""
+        if state["rules_mounted"]:
+            set_rules_controls(load_rules(preset.value))
+            return
         with rules_box:
             for title, control, note in (("Pausa dentro da frase", within, "mantém respiro no diálogo"), ("Pausa após fim de frase", after, "preserva intenção editorial"), ("Trecho mínimo entre cortes", minimum, "abaixo disso os cortes se mesclam"), ("Respiro preservado", breath, "nunca corta no meio da palavra"), ("Crossfade de áudio", crossfade, "suaviza a emenda")):
                 ui.label(title).classes("text-sm"); control.move(rules_box); ui.label(note).classes("text-xs rc-muted")
             protect.move(rules_box); punch.move(rules_box)
+        state["rules_mounted"] = True
+        set_rules_controls(load_rules(preset.value))
 
     def render_files() -> None:
         render_queue()

@@ -144,6 +144,10 @@ A renderização permite **1, 2 ou 3 vídeos em paralelo**; o padrão é 2. Use 
 quando a máquina tiver margem de CPU, memória e armazenamento. Cada vídeo ainda
 mantém seu próprio status e pode falhar sem interromper os demais.
 
+No macOS, quando o ffmpeg tiver `h264_videotoolbox`, os MP4s usam o encoder de
+hardware da Apple. Em outros sistemas, ou sem esse encoder, o render usa
+`libx264` com preset `ultrafast`.
+
 DeepFilterNet permanece opcional: a distribuição atual precisa de Rust/Cargo
 para compilar no Python 3.14. A normalização `loudnorm` em duas passadas já está
 disponível na interface.

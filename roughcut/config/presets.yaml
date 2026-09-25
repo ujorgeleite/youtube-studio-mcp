@@ -1,0 +1,26 @@
+colab:
+  pause_within_sentence_s: 0.8
+  pause_after_sentence_s: 0.35
+  breath_padding_s: 0.15
+  min_segment_s: 0.5
+  audio_crossfade_ms: 20
+  preserve_dramatic_pauses: true
+  punch_in: true
+
+vlog:
+  pause_within_sentence_s: 0.7
+  pause_after_sentence_s: 0.3
+  breath_padding_s: 0.12
+  min_segment_s: 0.45
+  audio_crossfade_ms: 15
+  preserve_dramatic_pauses: true
+  punch_in: true
+
+solo-emocional:
+  pause_within_sentence_s: 1.5
+  pause_after_sentence_s: 0.7
+  breath_padding_s: 0.25
+  min_segment_s: 0.7
+  audio_crossfade_ms: 25
+  preserve_dramatic_pauses: true
+  punch_in: false

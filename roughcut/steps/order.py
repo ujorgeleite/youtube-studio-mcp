@@ -80,13 +80,22 @@ def order(
     format_path: str,
     prompt_path: str,
     llm=None,
+    on_prompt=None,
+    on_raw=None,
 ) -> dict:
     """Monta a cut-list a partir dos transcripts e do formato.
 
     `llm` é uma função (prompt: str) -> str; se None, usa o cliente real.
+    `on_prompt`/`on_raw` recebem o prompt enviado e a resposta crua do LLM,
+    permitindo capturá-los sem acoplar este passo à camada de registro.
     """
     template = load_prompt_template(prompt_path)
     format_yaml = load_format(format_path)
     prompt = build_prompt(template, format_yaml, transcripts)
+    if on_prompt is not None:
+        on_prompt(prompt)
     call = llm or _call_llm
-    return parse_cut_list(call(prompt))
+    raw = call(prompt)
+    if on_raw is not None:
+        on_raw(raw)
+    return parse_cut_list(raw)

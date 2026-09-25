@@ -1,13 +1,105 @@
-# roughcut
+# Roughcut
 
-Pipeline de **pré-montagem** de vídeo. Recebe uma pasta de clipes brutos e um
-formato, e cospe um **stringout** (MP4 pré-montado) mais uma crítica da ordenação.
+Ferramenta local para preparar vídeos antes da edição. O fluxo principal é o
+**removedor inteligente de silêncios**: analisa fala, propõe cortes revisáveis e
+gera cópias MP4 prontas para importar no editor.
 
 > **Projeto isolado.** Vive num monorepo ao lado de um MCP server, mas não
 > compartilha venv, dependências nem imports com ele. A única coisa em comum é o
 > `.git` da raiz. Nada aqui importa código do MCP.
 
-## Os 3 passos
+## Rodar o removedor de silêncios
+
+Este é o roteiro para uma pessoa nova testar a interface.
+
+### 1. Pré-requisitos
+
+- **macOS com Apple Silicon (M1, M2, M3 ou M4)**. A análise de fala usa
+  `mlx-whisper` e foi validada nesse ambiente.
+- **Python 3.10 ou superior**. Confirme com `python3 --version`.
+- **ffmpeg e ffprobe** instalados no sistema. No macOS com Homebrew:
+
+  ```bash
+  brew install ffmpeg
+  ffmpeg -version
+  ffprobe -version
+  ```
+
+- Internet na primeira análise: o modelo local de Whisper é baixado uma vez e
+  fica em cache. Reserve espaço livre em disco para ele e para os MP4s gerados.
+
+### 2. Instalação
+
+Abra o Terminal na raiz do repositório e execute:
+
+```bash
+cd roughcut
+make install
+make doctor
+```
+
+`make install` cria `roughcut/.venv` e instala somente as dependências deste
+projeto. `make doctor` confirma `ffmpeg`, `ffprobe` e os imports de Python antes
+de abrir a interface.
+
+### 3. Abrir a interface
+
+```bash
+cd roughcut
+make silence-ui
+```
+
+Mantenha esse terminal aberto e acesse [http://localhost:8080](http://localhost:8080).
+
+### 4. Processar um lote
+
+1. Clique em **Escolher pasta** e selecione a pasta `raw` com os vídeos.
+2. Clique em **Carregar vídeos**. As miniaturas confirmam os arquivos lidos.
+3. Marque somente os vídeos desejados e clique em **Analisar selecionados**.
+   A primeira execução pode levar mais tempo por baixar o modelo.
+4. Selecione cada vídeo no campo **Vídeo analisado**, revise a timeline e use
+   **Remover** ou **Restaurar** em cada corte proposto.
+5. Escolha **2 em paralelo** para o uso normal. Tente **3 em paralelo** se o
+   Mac tiver folga; volte para 2 se ele ficar pesado.
+6. Clique em **Processar selecionados**. A tela troca para execução do lote,
+   com cronômetro, progresso e relatório por vídeo.
+
+### 5. Encontrar os resultados
+
+Nada sobrescreve a pasta raw. Para uma origem chamada `raw`, a ferramenta cria
+uma pasta irmã chamada `raw__corte-inteligente/`:
+
+```text
+raw__corte-inteligente/
+├── videos/       # MP4s: processed_<origem>__sem-silencios.mp4
+├── reports/      # resumo do lote e revisão em Markdown
+├── subtitles/    # SRT da fala mantida
+├── timelines/    # FCPXML apontando ao vídeo original
+├── plans/        # JSON dos cortes
+├── .audio/       # temporários
+└── .cache/       # VAD e transcrição reutilizáveis
+```
+
+O painel **Relatório em formação** mostra, para cada vídeo, cortes aplicados,
+duração removida, duração antes/depois, tempo de render e eventuais erros.
+
+### Solução rápida de problemas
+
+| Situação | Ação |
+|---|---|
+| `ffmpeg não encontrado` | Rode `brew install ffmpeg`, feche e reabra o Terminal, depois execute `make doctor`. |
+| A página não abre | Confirme que `make silence-ui` continua rodando e abra `http://localhost:8080`. |
+| Vídeo marcado como sem áudio | O arquivo não possui uma trilha de áudio utilizável; ele é ignorado e os demais continuam. |
+| A análise demora no primeiro vídeo | Aguarde o download e carregamento inicial do modelo Whisper. As próximas análises reutilizam o cache. |
+| O Mac fica pesado | Altere **Renderização** de 3 para 2 ou 1 por vez antes de processar. |
+
+## Outros fluxos do projeto
+
+Além do removedor, o projeto mantém o pipeline de **pré-montagem**: recebe
+clipes e um formato editorial, e produz um stringout MP4 com uma crítica de
+ordenação.
+
+### Os 3 passos
 
 | Passo | Módulo | Determinístico? | Testado? |
 |------|--------|-----------------|----------|
@@ -18,29 +110,10 @@ formato, e cospe um **stringout** (MP4 pré-montado) mais uma crítica da ordena
 A **qualidade** da ordenação (passo 2) NÃO é coberta por teste — é o passo do LLM,
 não-determinístico. Você valida rodando de verdade num vídeo.
 
-## Pré-requisitos
+### Executar a pré-montagem
 
-- **ffmpeg** instalado no sistema (não é pacote pip):
-
-  ```bash
-  ffmpeg -version   # confirme que está instalado
-  brew install ffmpeg   # macOS, se faltar
-  ```
-
-- Python 3.10+ e um venv **próprio desta pasta**.
-
-## Setup
-
-```bash
-cd roughcut
-python -m venv .venv
-.venv/bin/pip install -r requirements.txt
-```
-
-Para o passo 2 (LLM), configure as credenciais da Anthropic (`ANTHROPIC_API_KEY`
-ou `ant auth login`).
-
-## Uso
+Para o passo de ordenação por LLM, configure `ANTHROPIC_API_KEY` ou execute
+`ant auth login` antes de rodar o pipeline.
 
 ```bash
 # pipeline completo
@@ -54,6 +127,14 @@ ou `ant auth login`).
 ```
 
 Flags: `--input`, `--format`, `--output`, `--dry-run`, `--cut-list`, `--model-size`.
+
+## Runs (logs ricos para IA)
+
+Cada execução do pipeline legado escreve um bundle autocontido em `runs/<stamp>__<slug>/`:
+`run.json` (manifesto: params, ambiente, timing por passo, artefatos, status),
+`events.jsonl` (log estruturado append-only) e os artefatos de cada passo
+(`transcripts.txt`, `prompt.md`, `llm_response.txt`, `cut-list.json`, `critica.json`).
+A pasta `runs/` é local e fica no `.gitignore`.
 
 ## O cut-list (schema)
 

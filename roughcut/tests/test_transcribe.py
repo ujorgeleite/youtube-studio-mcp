@@ -59,3 +59,21 @@ def test_transcribe_folder_concatenates(monkeypatch, tmp_path):
     assert "[C01] arquivo=a.mp4" in text
     assert "[C02] arquivo=b.mov" in text
     assert "\n\n" in text
+
+
+def test_transcribe_folder_reports_progress(monkeypatch, tmp_path):
+    (tmp_path / "a.mp4").write_bytes(b"x")
+    (tmp_path / "b.mov").write_bytes(b"x")
+    monkeypatch.setattr(
+        transcribe,
+        "_run_whisper",
+        lambda path, model_size: [{"start": 0.0, "end": 1.0, "text": "t"}],
+    )
+    progress = []
+
+    transcribe.transcribe_folder(
+        str(tmp_path),
+        on_clip=lambda clip_id, index, total, path: progress.append((clip_id, index, total)),
+    )
+
+    assert progress == [("C01", 1, 2), ("C02", 2, 2)]

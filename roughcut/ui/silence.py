@@ -355,10 +355,48 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         if state["rules_mounted"]:
             set_rules_controls(load_rules(preset.value))
             return
+        explanations = {
+            "Pausa dentro da frase": (
+                "Define o menor silêncio entre duas palavras da mesma frase que vira candidato a corte. "
+                "Diminuir encontra mais pausas e cria mais cortes; aumentar preserva mais respiro."
+            ),
+            "Pausa após fim de frase": (
+                "Define o menor silêncio depois de ., !, ? ou … que será reduzido. O valor também é o respiro "
+                "mantido nessa transição. Diminuir deixa a fala mais ágil; aumentar preserva cadência entre frases."
+            ),
+            "Trecho mínimo entre cortes": (
+                "Impede cortes muito próximos. Se o trecho de vídeo mantido antes do próximo corte for menor que este valor, "
+                "o segundo corte é descartado. Aumentar reduz emendas rápidas."
+            ),
+            "Respiro preservado": (
+                "Em pausas dentro da mesma frase, mantém metade deste tempo antes e metade depois da emenda. "
+                "Aumentar deixa a fala mais natural, mas remove menos vídeo."
+            ),
+            "Crossfade de áudio": (
+                "O valor é salvo junto das regras para o plano de edição. O render atual ainda concatena áudio sem crossfade, "
+                "portanto mudar este controle não altera o MP4 nesta versão."
+            ),
+            "Proteger pausas dramáticas": (
+                "Quando a análise marcar uma pausa como protegida, ela não será cortada. Desligar permite cortar essas pausas. "
+                "A análise atual ainda não marca pausas dramáticas automaticamente em todos os vídeos."
+            ),
+            "Disfarce de jump cut": (
+                "Reserva a regra para aplicar variação visual nas emendas. Ela ainda não é aplicada pelo render atual, "
+                "portanto mudar este controle não altera o MP4 nesta versão."
+            ),
+        }
         with rules_box:
             for title, control, note in (("Pausa dentro da frase", within, "mantém respiro no diálogo"), ("Pausa após fim de frase", after, "preserva intenção editorial"), ("Trecho mínimo entre cortes", minimum, "abaixo disso os cortes se mesclam"), ("Respiro preservado", breath, "nunca corta no meio da palavra"), ("Crossfade de áudio", crossfade, "suaviza a emenda")):
-                ui.label(title).classes("text-sm"); control.move(rules_box); ui.label(note).classes("text-xs rc-muted")
-            protect.move(rules_box); punch.move(rules_box)
+                with ui.row().classes("w-full items-center gap-1"):
+                    ui.label(title).classes("text-sm")
+                    ui.icon("info_outline", size="16px").classes("text-teal-300 cursor-help").tooltip(explanations[title])
+                control.move(rules_box); ui.label(note).classes("text-xs rc-muted")
+            with ui.row().classes("w-full items-center gap-1"):
+                protect.move()
+                ui.icon("info_outline", size="16px").classes("text-teal-300 cursor-help").tooltip(explanations["Proteger pausas dramáticas"])
+            with ui.row().classes("w-full items-center gap-1"):
+                punch.move()
+                ui.icon("info_outline", size="16px").classes("text-teal-300 cursor-help").tooltip(explanations["Disfarce de jump cut"])
         state["rules_mounted"] = True
         set_rules_controls(load_rules(preset.value))
 

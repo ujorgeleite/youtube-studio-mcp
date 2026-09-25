@@ -140,6 +140,10 @@ atualizado a cada segundo e salvo em `reports/<lote>__summary.json` e
 `reports/<lote>__summary.md`; ele consolida duração original e final, cortes,
 tempo de análise/renderização e os artefatos gerados por vídeo.
 
+A renderização permite **1, 2 ou 3 vídeos em paralelo**; o padrão é 2. Use 3
+quando a máquina tiver margem de CPU, memória e armazenamento. Cada vídeo ainda
+mantém seu próprio status e pode falhar sem interromper os demais.
+
 DeepFilterNet permanece opcional: a distribuição atual precisa de Rust/Cargo
 para compilar no Python 3.14. A normalização `loudnorm` em duas passadas já está
 disponível na interface.

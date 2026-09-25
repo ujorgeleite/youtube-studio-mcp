@@ -38,7 +38,7 @@ def entry_report_row(entry: dict[str, Any]) -> dict[str, Any]:
         "final_s": round(max(0.0, original_s - removed_s), 3),
         "removed_s": removed_s,
         "removed_pct": round(100 * removed_s / original_s, 2) if original_s else 0.0,
-        "cuts": len(entry.get("plan").cuts) if entry.get("plan") else 0,
+        "cuts": sum(1 for index, _ in enumerate(entry.get("plan").cuts) if index not in entry.get("disabled_cuts", set())) if entry.get("plan") else 0,
         "analysis_s": round(float(entry.get("analysis_elapsed_s", 0)), 3),
         "render_s": round(float(entry.get("render_elapsed_s", 0)), 3),
         "completed_at": entry.get("completed_at"),

@@ -102,6 +102,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
 .rc-event { border-left:2px solid #2dd4bf; background:#10181f; } .rc-progress-label { font-variant-numeric:tabular-nums; }
 .rc-report-row { border-left:3px solid #2dd4bf; background:#10181f; border-radius:7px; }
 .rc-processing-clock { font-variant-numeric:tabular-nums; letter-spacing:.04em; text-shadow:0 0 28px rgba(45,212,191,.28); }
+.rc-metric { min-width:145px; border-radius:10px; } .rc-report-complete { border-color:#2dd4bf; background:#102724; } .rc-report-failed { border-color:#fb7185; background:#2a1820; } .rc-report-skipped { border-color:#fbbf24; background:#2a2415; }
 </style>""")
     state = {
         "files": [], "selected": None, "running": False, "active_cut": None,
@@ -178,7 +179,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
             processing_panel.set_visibility(False)
         with ui.card().classes("rc-card w-full p-3"):
             with ui.row().classes("w-full items-center"):
-                ui.label("Arquivos brutos").classes("font-bold flex-grow")
+                files_title = ui.label("Arquivos brutos").classes("font-bold flex-grow")
                 all_button = ui.button("Selecionar todos").props("flat dense no-caps")
                 none_button = ui.button("Limpar").props("flat dense no-caps")
             queue_box = ui.row().classes("w-full gap-2 mt-2")
@@ -189,6 +190,7 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
             report_box = ui.column().classes("w-full gap-2 mt-2")
     with ui.footer().classes("rc-bottom items-center p-4 gap-3"):
         process = ui.button("▶ Processar selecionados", color="teal").props("no-caps").classes("font-bold")
+        parallelism = ui.select({1: "1 por vez", 2: "2 em paralelo", 3: "3 em paralelo"}, value=2, label="Renderização").props("dense outlined").classes("w-40")
         status = ui.label("Carregue uma pasta raw para começar.").classes("text-sm rc-muted flex-grow")
         ui.label("VAD em cache ✓").classes("rc-chip")
         progress = ui.linear_progress(value=0).classes("w-48"); progress.set_visibility(False)
@@ -226,6 +228,9 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         rules_panel.set_visibility(not active)
         review_panel.set_visibility(not active)
         processing_panel.set_visibility(active)
+        files_title.text = "Execução do lote" if active else "Arquivos brutos"
+        all_button.set_visibility(not active)
+        none_button.set_visibility(not active)
 
     def render_processing_center() -> None:
         batch = state.get("batch")
@@ -264,16 +269,32 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         with report_box:
             duration = summary["duration"]
             videos = summary["videos"]
-            ui.label(f"{videos['completed']} concluídos · {videos['failed']} falhas · {videos['without_audio']} sem áudio · {videos['in_progress']} em andamento").classes("text-xs text-teal-200")
-            ui.label(f"Tempo investido: {_clock(summary['elapsed_s'], brief=True)} · vídeo removido: {_clock(duration['removed_s'], brief=True)}").classes("text-xs rc-muted")
+            with ui.row().classes("w-full gap-3").style("flex-wrap:wrap"):
+                for title, value, note, color in (
+                    ("TEMPO INVESTIDO", _clock(summary["elapsed_s"]), "tempo de processamento", "#172433"),
+                    ("VÍDEO REMOVIDO", _clock(duration["removed_s"], brief=True), f"{duration['removed_pct']:.1f}% do lote", "#102f2a"),
+                    ("CORTES APLICADOS", str(sum(row["cuts"] for row in summary["rows"])), f"{videos['completed']}/{videos['total']} vídeos concluídos", "#2b2038"),
+                ):
+                    with ui.card().classes("rc-metric flex-grow p-3").style(f"background:{color};border:1px solid #3c5263"):
+                        ui.label(title).classes("text-xs font-bold rc-muted")
+                        ui.label(value).classes("text-2xl font-bold text-teal-200")
+                        ui.label(note).classes("text-xs rc-muted")
+            ui.label(f"STATUS · {videos['completed']} concluídos · {videos['failed']} falhas · {videos['without_audio']} sem áudio · {videos['in_progress']} em andamento").classes("text-xs font-bold text-slate-300 mt-2")
             for row in reversed(summary["rows"]):
                 if row["status"] not in TERMINAL_STAGES:
                     continue
-                with ui.row().classes("rc-report-row w-full items-center gap-2 px-2 py-1"):
-                    ui.label(row["name"]).classes("text-xs flex-grow ellipsis")
-                    ui.label(row["status"]).classes("text-xs text-teal-200" if row["status"] == "Concluído" else "text-amber-200" if row["status"] == "Sem áudio — ignorado" else "text-red-300")
-                    ui.label(f"{row['removed_s']:.1f}s removidos").classes("text-xs rc-muted")
-                    ui.label(f"{row['render_s'] or row['analysis_s']:.1f}s").classes("text-xs rc-muted")
+                class_name = "rc-report-complete" if row["status"] == "Concluído" else "rc-report-skipped" if row["status"] == "Sem áudio — ignorado" else "rc-report-failed"
+                with ui.card().classes(f"rc-report-row {class_name} w-full p-3"):
+                    with ui.row().classes("w-full items-center no-wrap"):
+                        ui.label(row["name"]).classes("text-base font-bold flex-grow ellipsis")
+                        ui.badge(row["status"], color="teal" if row["status"] == "Concluído" else "amber" if row["status"] == "Sem áudio — ignorado" else "negative").classes("text-sm")
+                    with ui.row().classes("w-full gap-5 mt-2").style("flex-wrap:wrap"):
+                        ui.label(f"{row['cuts']} cortes").classes("text-lg font-bold text-teal-200")
+                        ui.label(f"{_clock(row['removed_s'], brief=True)} removido").classes("text-lg font-bold text-teal-200")
+                        ui.label(f"{_clock(row['original_s'], brief=True)} → {_clock(row['final_s'], brief=True)}").classes("text-sm rc-muted")
+                        ui.label(f"render: {_clock(row['render_s'], brief=True)}").classes("text-sm rc-muted")
+                    if row["error"]:
+                        ui.label(row["error"]).classes("text-sm text-red-200 mt-1")
             artifacts = state.get("batch_artifacts", {})
             if artifacts:
                 ui.label(f"✓ resumo: {artifacts['markdown'].name} · {artifacts['json'].name}").classes("text-xs text-teal-300")
@@ -387,9 +408,9 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
 
     def set_busy(value: bool) -> None:
         if value:
-            analyze.disable(); process.disable()
+            analyze.disable(); process.disable(); parallelism.disable()
         else:
-            analyze.enable(); process.enable()
+            analyze.enable(); process.enable(); parallelism.enable()
 
     def set_stage(entry: dict, stage: str, *, index: int | None = None, total: int | None = None, fraction: float = 0.0, error: str | None = None) -> None:
         entry["stage"] = stage
@@ -561,12 +582,17 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
         render_files(); render_batch_summary(); persist_batch_summary(); render_report()
         completed = 0
         failures = 0
-        try:
-            for index, entry in enumerate(targets, 1):
+        finished = 0
+        workers = int(parallelism.value)
+        semaphore = asyncio.Semaphore(workers)
+
+        async def render_entry(entry: dict) -> None:
+            nonlocal completed, failures, finished
+            async with semaphore:
+                entry_started = perf_counter()
                 try:
-                    entry_started = perf_counter()
-                    status.text = f"{index}/{len(targets)} · renderizando: {entry['name']}"
-                    set_stage(entry, "Renderizando", index=index, total=len(targets), fraction=0.1)
+                    status.text = f"Renderizando em paralelo ({workers}) · {entry['name']}"
+                    set_stage(entry, "Renderizando", fraction=0.1)
                     await asyncio.sleep(0)
                     disabled = entry.get("disabled_cuts", set())
                     reviewed = replace(entry["plan"], cuts=[cut for i, cut in enumerate(entry["plan"].cuts) if i not in disabled])
@@ -574,16 +600,20 @@ body { background:#10161b; color:#e5e7eb; } .nicegui-content { padding-bottom:12
                     entry["rendered"] = str(rendered)
                     entry["render_elapsed_s"] = perf_counter() - entry_started
                     completed += 1
-                    set_stage(entry, "Concluído", index=index, total=len(targets), fraction=1)
-                    if entry["path"] == state["selected"]:
-                        render_review()
+                    set_stage(entry, "Concluído", fraction=1)
                 except Exception as exc:
                     failures += 1
                     entry["render_elapsed_s"] = perf_counter() - entry_started
-                    status.text = f"{index}/{len(targets)} · falhou: {entry['name']}"
-                    set_stage(entry, "Falhou", index=index, total=len(targets), fraction=1, error=_friendly_error(exc))
-                await asyncio.sleep(0)
-            status.text = f"Render concluído: {completed}/{len(targets)} MP4s" + (f" · {failures} falharam" if failures else f" · saída em {output.value}")
+                    status.text = f"Falhou · {entry['name']}"
+                    set_stage(entry, "Falhou", fraction=1, error=_friendly_error(exc))
+                finally:
+                    finished += 1
+                    progress.value = finished / len(targets)
+                    render_processing_center()
+
+        try:
+            await asyncio.gather(*(render_entry(entry) for entry in targets))
+            status.text = f"Render concluído: {completed}/{len(targets)} MP4s · {workers} em paralelo" + (f" · {failures} falharam" if failures else f" · saída em {output.value}")
         finally:
             state["running"] = False; progress.set_visibility(False); set_busy(False)
 

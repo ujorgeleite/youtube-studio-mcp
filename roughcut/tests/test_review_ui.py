@@ -269,3 +269,37 @@ def test_render_batch_moves_completed_selected_videos_to_incremental_report(monk
             assert 'not-selected.mp4' not in contents
 
     asyncio.run(exercise())
+
+
+def test_render_batch_respects_the_selected_parallelism(monkeypatch, tmp_path):
+    async def exercise():
+        active = 0
+        maximum = 0
+
+        async def controlled_io(function, *args, **kwargs):
+            nonlocal active, maximum
+            if function is silence.render_with_handles:
+                active += 1
+                maximum = max(maximum, active)
+                await asyncio.sleep(.01)
+                active -= 1
+            return function(*args, **kwargs)
+
+        monkeypatch.setattr(silence.run, 'io_bound', controlled_io)
+        monkeypatch.setattr(silence, 'render_with_handles', lambda plan, output: (tmp_path / f'processed_{Path(plan.source).stem}.mp4', tmp_path / 'plan.json'))
+        with Client(page('/parallel-render-test')) as client:
+            silence.smartcut_page()
+            button = next(e for e in client.elements.values() if isinstance(e, ui.button) and e.text == '▶ Processar selecionados')
+            callback = inspect.getclosurevars(next(iter(button._event_listeners.values())).handler).nonlocals['callback']
+            refs = inspect.getclosurevars(callback).nonlocals
+            refs['output'].value = str(tmp_path)
+            refs['parallelism'].set_value(2)
+            refs['state']['files'] = [
+                dict(path=f'{name}.mp4', name=f'{name}.mp4', duration=10, selected=True, thumb_key=name,
+                     plan=CutPlan(f'{name}.mp4', 10, 'colab', cuts=[Cut(1, 2, 'pausa_na_frase')]), artifacts={}, disabled_cuts=set())
+                for name in ('one', 'two', 'three')
+            ]
+            await callback()
+            assert maximum == 2
+
+    asyncio.run(exercise())

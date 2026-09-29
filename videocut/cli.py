@@ -17,9 +17,11 @@ from analysis.pipeline import Analysis, AnalysisMonitor, load_inventory  # noqa:
 from analysis.speech import transcribe_take  # noqa: E402
 from core.config import min_take_s, model_cached, models, vision_options  # noqa: E402
 from core.offline import enable_offline  # noqa: E402
+from core.keepawake import KEEP_AWAKE  # noqa: E402
 from core.project import Project  # noqa: E402
 from core.safety import SourceProtectionError, write_text  # noqa: E402
 from core.serial import write_json  # noqa: E402
+from core.thermal import macmon_available, read_thermal  # noqa: E402
 from media.audio import extract_speech_audio  # noqa: E402
 from media.catalog import catalog_folder  # noqa: E402
 from media.probe import probe  # noqa: E402
@@ -44,6 +46,11 @@ def doctor(_: argparse.Namespace) -> int:
     repos = {"whisper": models().get("whisper", "")} | {key: value["repo"] for key, value in vision_options().items()}
     for key, repo in repos.items():
         print(f"{'✓' if model_cached(repo) else '·'} modelo {key}: {repo}" + ("" if model_cached(repo) else " (baixa na primeira análise)"))
+    reading = read_thermal()
+    if macmon_available():
+        print(f"✓ temperatura: {reading.label}")
+    else:
+        print(f"· temperatura em °C indisponível: brew install macmon (estado do macOS: {reading.label})")
     print("Pronto." if ok else "Corrija os itens com ✗.")
     return 0 if ok else 1
 
@@ -79,17 +86,21 @@ def analyze(args: argparse.Namespace) -> int:
     project.intention = args.intention or project.intention
     project.model = args.model or project.model
     project.target_minutes = args.minutes or project.target_minutes
+    project.long_run = args.long_run or project.long_run
     project.save()
     monitor = AnalysisMonitor()
     worker = Thread(target=lambda: _run(Analysis(project, monitor)), daemon=True)
-    worker.start()
     printed = 0
-    while worker.is_alive():
-        sleep(1)
-        for line in monitor.log[printed:]:
-            print(f"  {line}")
-        printed = len(monitor.log)
-        print(f"[{monitor.elapsed_s:6.0f}s] {monitor.message}", end="\r", flush=True)
+    with KEEP_AWAKE:
+        print("Mac mantido acordado durante a análise (a tela pode apagar).")
+        worker.start()
+        while worker.is_alive():
+            sleep(1)
+            for line in monitor.log[printed:]:
+                print(f"  {line}")
+            printed = len(monitor.log)
+            thermal = f" · {monitor.thermal.last.label}" if monitor.thermal else ""
+            print(f"[{monitor.elapsed_s:6.0f}s] {monitor.message}{thermal}", end="\r", flush=True)
     print()
     if monitor.error:
         print(f"falhou: {monitor.error}")
@@ -161,6 +172,8 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--intention", default="")
             command.add_argument("--model", choices=list(vision_options()))
             command.add_argument("--minutes", type=float)
+            command.add_argument("--long-run", action="store_true",
+                                 help="pausa para esfriar quando o Mac passa do limite (config/execucao.yaml)")
             command.add_argument("--min-take-s", type=float, default=min_take_s(),
                                  help="takes novos mais curtos ficam fora da análise (padrão: config/modelos.yaml)")
         if name == "compare":

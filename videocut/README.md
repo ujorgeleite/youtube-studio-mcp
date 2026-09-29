@@ -14,7 +14,8 @@ aponta para arquivo e timestamp, e nada é montado sem a sua revisão.
 
 ## Instalação
 
-Requisitos: macOS com Apple Silicon, Python 3.12+, `ffmpeg`/`ffprobe` no PATH.
+Requisitos: macOS com Apple Silicon, Python 3.12+, `ffmpeg`/`ffprobe` e `macmon`
+(temperatura em °C) no PATH: `brew install ffmpeg macmon`.
 
 ```bash
 cd videocut
@@ -34,6 +35,15 @@ baixar também o 4B: `make models MODELS=qwen3-vl-8b,qwen3-vl-4b`.
 
 O download é protegido contra travamentos: se ficar 90 s sem receber dados, é
 reiniciado de onde parou (até 5 tentativas) e o progresso aparece na tela.
+
+### Modo de cargas longas
+
+Interruptor no painel **Execução** da tela Material (ou `cli.py analyze --long-run`).
+Antes de cada chamada ao modelo e de cada bloco do render, o VideoCut lê a
+temperatura (`macmon`) e o estado térmico do macOS. Acima de 95 °C ou em
+“sério”, pausa e só retoma abaixo de 80 °C e em “razoável”. Limites em
+`config/execucao.yaml`. A temperatura aparece nas telas de Análise e Entrega
+mesmo com o modo desligado.
 
 ## Fluxo
 

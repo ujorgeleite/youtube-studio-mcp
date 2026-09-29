@@ -9,6 +9,7 @@ from nicegui import run, ui
 from core.config import load_yaml, min_take_s, models, vision_options
 from core.project import Project, default_output_dir
 from core.safety import SourceProtectionError
+from core.thermal import LongRunConfig
 from core.timefmt import clock
 from media.catalog import catalog_folder
 from media.probe import MediaError
@@ -68,6 +69,7 @@ def render(shell: Shell) -> None:
         with theme.stack():
             if project and project.takes:
                 intention_panel(shell)
+                execution_panel(shell)
             with theme.panel():
                 theme.eyebrow("Uma decisão de cada vez")
                 ui.label("Primeiro entender o material. Depois escolher a história. Só então montar.").classes("vc-muted vc-small")
@@ -197,3 +199,20 @@ def intention_panel(shell: Shell) -> None:
             start.disable()
         theme.note("Na primeira análise os modelos são baixados do Hugging Face (Whisper ~1,6 GB; "
                    "Qwen3-VL 4B ~3,1 GB ou 8B ~5,8 GB), com progresso na tela. Para baixar antes: make models.")
+
+
+def execution_panel(shell: Shell) -> None:
+    project = shell.studio.project
+    limits = LongRunConfig.load()
+
+    def toggle(field: str, value: bool) -> None:
+        setattr(project, field, value)
+        project.save()
+        shell.main.refresh()
+
+    with theme.panel():
+        ui.label("Execução").classes("vc-h3")
+        ui.switch("Modo de cargas longas", value=project.long_run,
+                  on_change=lambda event: toggle("long_run", bool(event.value))).props("color=teal-3")
+        ui.label(f"Pausa entre etapas quando o Mac passa de {limits.pause_temp_c:g} °C ou o macOS indica “sério”, "
+                 f"e retoma abaixo de {limits.resume_temp_c:g} °C. Use em análises e renders longos.").classes("vc-tiny vc-muted")

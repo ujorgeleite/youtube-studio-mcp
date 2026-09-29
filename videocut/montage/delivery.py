@@ -60,6 +60,7 @@ def deliver(
     work_dir: str | Path,
     *,
     progress: Progress | None = None,
+    before_segment: Callable[[], None] | None = None,
 ) -> dict[str, str]:
     """Documentos primeiro: se o render falhar, plano e timeline já estão disponíveis."""
     report = progress or (lambda fraction, message: None)
@@ -67,5 +68,6 @@ def deliver(
     plan = build_edit_plan(proposal.id, video, inventory.takes, review)
     report(0.02, "Gravando plano, relatório, legenda e timeline")
     write_documents(proposal, video, plan, inventory, review, paths)
-    render_plan(plan, paths["video"], work_dir, progress=lambda fraction, message: report(0.05 + fraction * 0.95, message))
+    render_plan(plan, paths["video"], work_dir, progress=lambda fraction, message: report(0.05 + fraction * 0.95, message),
+                before_segment=before_segment)
     return {key: str(path) for key, path in paths.items()}

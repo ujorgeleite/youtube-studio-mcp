@@ -8,12 +8,14 @@ from time import perf_counter
 
 from nicegui import run, ui
 
+from core.keepawake import KEEP_AWAKE
 from core.project import RenderRecord
+from core.thermal import ThermalGovernor
 from core.timefmt import clock, stopwatch
 from montage.delivery import deliver
 from montage.plan import ordered_beats
 
-from . import theme
+from . import power_view, theme, thermal_view
 from .media import media_url
 from .shell import Shell
 from .state import REVIEW, STORIES
@@ -40,9 +42,21 @@ async def process(shell: Shell) -> None:
     inventory = studio.inventory
     if studio.busy or proposal is None or inventory is None or shell.refuse_if_working():
         return
-    live = studio.delivery = {"running": True, "started": perf_counter(), "finished": 0.0, "fraction": {}, "message": "Preparando"}
+    governor = ThermalGovernor(enabled=project.long_run)
+    live = studio.delivery = {"running": True, "started": perf_counter(), "finished": 0.0, "fraction": {},
+                              "message": "Preparando", "governor": governor}
     project.renders = {video.id: RenderRecord(video.id, QUEUED) for video in proposal.videos}
     shell.refresh()
+    with KEEP_AWAKE:
+        await render_videos(proposal, inventory, live, governor, project)
+    live.update(running=False, finished=perf_counter(), message=" · ".join(filter(None, ["Entrega concluída", governor.summary()])))
+    failures = sum(record.status == FAILED for record in project.renders.values())
+    shell.notify("Entrega concluída." if not failures else f"{failures} vídeo(s) falharam; veja o relatório.",
+                 "positive" if not failures else "warning")
+    shell.refresh()
+
+
+async def render_videos(proposal, inventory, live: dict, governor: ThermalGovernor, project) -> None:
     for video in proposal.videos:
         review = project.review.get(video.id)
         record = project.renders[video.id]
@@ -56,7 +70,7 @@ async def process(shell: Shell) -> None:
         try:
             artifacts = await run.io_bound(
                 deliver, proposal, video, inventory, review, project.layout.delivery(proposal.id, video.id),
-                project.layout.work / "render", progress=progress,
+                project.layout.work / "render", progress=progress, before_segment=governor.wait_if_hot,
             )
         except Exception as error:  # noqa: BLE001 - uma falha fica no vídeo; os outros continuam
             record.status, record.error = FAILED, str(error).splitlines()[0][:200]
@@ -65,11 +79,6 @@ async def process(shell: Shell) -> None:
             record.duration_s = round(sum(beat.duration_s for beat in ordered_beats(video, review)), 2)
         record.seconds = round(perf_counter() - started, 1)
         project.save()
-    live.update(running=False, finished=perf_counter(), message="Entrega concluída")
-    failures = sum(record.status == FAILED for record in project.renders.values())
-    shell.notify("Entrega concluída." if not failures else f"{failures} vídeo(s) falharam; veja o relatório.",
-                 "positive" if not failures else "warning")
-    shell.refresh()
 
 
 def open_in_finder(path: str) -> None:
@@ -135,8 +144,13 @@ def live_content(shell: Shell, proposal) -> None:
                 ui.label(heading).classes("vc-h2 w-full")
                 theme.progress_bar(sum(fractions) / len(fractions) if fractions else 0)
                 ui.label(f"{done}/{total} vídeos · {clock(planned)} de montagem planejada").classes("vc-muted w-full")
-                if running:
+                if running or finished:
                     ui.label(state.get("message", "")).classes("vc-tiny vc-muted w-full")
+                if state.get("governor"):
+                    with ui.column().classes("w-full items-center"):
+                        thermal_view.render(state["governor"])
+                        if running:
+                            power_view.awake_badge(project)
                 if empty:
                     ui.label("Uma saída ficou sem blocos. Volte à revisão e restaure pelo menos um.").classes("warn w-full")
                 with ui.row().classes("w-full justify-center mt-4"):

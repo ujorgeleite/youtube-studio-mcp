@@ -5,7 +5,7 @@ Itens planejados e ainda **não implementados**. Quando a pessoa pedir
 cada item (com `make test` verde e um commit por item) e registre em `PLANO.md`.
 
 - [x] **1. Desmarcar takes curtos demais**
-- [ ] **2. Modo de cargas longas (proteção térmica)** — requer `brew install macmon` (pedir permissão)
+- [x] **2. Modo de cargas longas (proteção térmica)** — requer `brew install macmon` (pedir permissão)
 - [ ] **3. Manter o Mac acordado durante o trabalho**
 - [ ] **4. Seletor “Rodar de madrugada” (sem senha)**
 - [ ] **5. Acelerar a visão sem perder qualidade** — só depois do A/B no Episódio06

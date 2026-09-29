@@ -35,6 +35,25 @@ def generate_json(model: LocalModel, prompt: str, images: list[Path] | None = No
     raise ModelError(str(last_error))
 
 
+class ThermalGuardedModel:
+    """Antes de cada chamada, espera o Mac esfriar se o modo de cargas longas estiver ligado."""
+
+    def __init__(self, inner: LocalModel, governor):
+        self.inner = inner
+        self.governor = governor
+
+    @property
+    def name(self) -> str:
+        return self.inner.name
+
+    def generate(self, prompt: str, images: list[Path] | None = None, max_tokens: int = 700) -> str:
+        self.governor.wait_if_hot()
+        return self.inner.generate(prompt, images, max_tokens)
+
+    def release(self) -> None:
+        self.inner.release()
+
+
 class MlxModel:
     def __init__(self, repo: str):
         self.name = repo

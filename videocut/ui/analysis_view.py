@@ -6,10 +6,11 @@ from nicegui import run, ui
 
 from analysis.pipeline import STAGES, Analysis, AnalysisCancelled, AnalysisMonitor
 from analysis.vlm import MlxModel
+from core.keepawake import KEEP_AWAKE
 from core.project import STAGE_FAILED, STAGE_READY
 from core.timefmt import stopwatch
 
-from . import theme
+from . import power_view, theme, thermal_view
 from .shell import Shell
 from .state import ANALYSIS, MATERIAL, STORIES
 
@@ -31,7 +32,8 @@ async def start_analysis(shell: Shell) -> None:
     studio.inventory_cache = None
     shell.go(ANALYSIS)
     try:
-        await run.io_bound(Analysis(project, studio.monitor, MODEL_FACTORY).run)
+        with KEEP_AWAKE:
+            await run.io_bound(Analysis(project, studio.monitor, MODEL_FACTORY).run)
     except AnalysisCancelled:
         shell.notify("Análise cancelada. O que já foi transcrito e descrito ficou em cache.")
     except Exception as error:  # noqa: BLE001 - a mensagem aparece na tela; o lote já tratou falhas por take
@@ -82,6 +84,9 @@ def live_content(shell: Shell) -> None:
                 ui.label(monitor.message or "Aguardando").classes("vc-tiny vc-muted")
                 if monitor.download is not None:
                     theme.progress_bar(monitor.download)
+                thermal_view.render(monitor.thermal)
+                if studio.analyzing:
+                    power_view.awake_badge(project)
                 for index, name in enumerate(STAGES):
                     done = monitor.stage > index or (monitor.stage == index and not studio.analyzing and not monitor.error)
                     current = monitor.stage == index and studio.analyzing

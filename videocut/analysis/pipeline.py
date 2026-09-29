@@ -18,6 +18,7 @@ from core.project import (
     STAGE_FAILED, STAGE_MEDIA, STAGE_PENDING, STAGE_READY, STAGE_SPEECH, STAGE_VISION, Project, TakeStatus,
 )
 from core.schema import Inventory, StoryReport, Take, Transcript, VisualObservation
+from core.thermal import ThermalGovernor
 from core.serial import from_data, read_json, write_json
 from media.audio import extract_speech_audio
 from media.probe import MediaError, probe
@@ -27,7 +28,7 @@ from .inventory import build_inventory
 from .models import ensure_model
 from .speech import release_model, transcribe_take
 from .vision import analyze_take_vision
-from .vlm import LocalModel, MlxModel
+from .vlm import LocalModel, MlxModel, ThermalGuardedModel
 
 STAGES = (
     "Preparar modelos, mídia e áudio",
@@ -54,6 +55,7 @@ class AnalysisMonitor:
     error: str | None = None
     download: float | None = None
     cancel: threading.Event = field(default_factory=threading.Event)
+    thermal: ThermalGovernor | None = None
 
     @property
     def elapsed_s(self) -> float:
@@ -88,12 +90,15 @@ def load_inventory(project: Project) -> Inventory | None:
 
 class Analysis:
     def __init__(self, project: Project, monitor: AnalysisMonitor | None = None,
-                 model_factory: ModelFactory = MlxModel, refresh: bool = False):
+                 model_factory: ModelFactory = MlxModel, refresh: bool = False,
+                 governor: ThermalGovernor | None = None):
         self.project = project
         self.monitor = monitor or AnalysisMonitor()
         self.model_factory = model_factory
         self.refresh = refresh
         self.failed: dict[str, str] = {}
+        self.governor = governor or ThermalGovernor(enabled=project.long_run, cancel=self.monitor.cancel)
+        self.monitor.thermal = self.governor
 
     def set_status(self, take: Take, stage: str, fraction: float = 0.0, error: str | None = None) -> None:
         current = self.project.status.get(take.id) or TakeStatus()
@@ -149,9 +154,10 @@ class Analysis:
         transcripts: dict[str, Transcript] = {}
         try:
             for take in self.active(takes):
-                self.check_cancel()
                 if take.id not in audio:
                     continue
+                self.governor.wait_if_hot()
+                self.check_cancel()
                 self.set_status(take, STAGE_SPEECH, 0.3)
                 self.monitor.message = f"Transcrevendo {take.id} · {take.name}"
                 try:
@@ -188,6 +194,7 @@ class Analysis:
                 continue
             self.set_status(take, STAGE_READY, 1.0)
             self.project.status[take.id].seconds = round(perf_counter() - started, 1)
+            self.project.save()
             for item in sorted(observations[take.id], key=lambda item: -item.interest)[:2]:
                 self.monitor.note(f"{take.id} · imagem / {(item.action or item.description)[:90]}")
         return observations
@@ -210,7 +217,7 @@ class Analysis:
             transcripts = self.transcribe(takes, audio)
             project.save()
             self.monitor.message = "Carregando o modelo visual na memória…"
-            model = self.model_factory(repo)
+            model = ThermalGuardedModel(self.model_factory(repo), self.governor)
             observations = self.describe(takes, transcripts, model)
             project.save()
             self.check_cancel()
@@ -237,4 +244,7 @@ class Analysis:
         finally:
             if model is not None:
                 model.release()
+            for line in (self.governor.summary(), self.governor.warning):
+                if line:
+                    self.monitor.note(line)
             self.monitor.finished_at = perf_counter()

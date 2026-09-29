@@ -159,7 +159,8 @@ def test_delivery_renders_each_video_and_isolates_failures(tmp_path: Path, monke
     async def inline(function, *args, **kwargs):
         return function(*args, **kwargs)
 
-    def fake_deliver(proposal, video, inventory, review, root, work, progress=None):
+    def fake_deliver(proposal, video, inventory, review, root, work, progress=None, before_segment=None):
+        before_segment()
         if video.title == "Conversa":
             raise RuntimeError("ffmpeg falhou no bloco 2")
         progress(0.5, "meio")

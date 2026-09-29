@@ -124,8 +124,12 @@ def segment_key(segment: Segment, plan: EditPlan, encoder: list[str]) -> str:
     return fingerprint(clips, [plan.sources[clip.take_id] for clip in clips], plan.format, encoder)
 
 
-def render_plan(plan: EditPlan, destination: str | Path, work_dir: str | Path, progress: Progress | None = None) -> Path:
-    """Renderiza em pasta temporária e só substitui o MP4 final quando tudo deu certo."""
+def render_plan(plan: EditPlan, destination: str | Path, work_dir: str | Path, progress: Progress | None = None,
+                before_segment: Callable[[], None] | None = None) -> Path:
+    """Renderiza em pasta temporária e só substitui o MP4 final quando tudo deu certo.
+
+    `before_segment` roda antes de cada bloco que precisa ser montado (pausa térmica).
+    """
     if not plan.main_track:
         raise MediaError("o plano não tem blocos para renderizar")
     report = progress or (lambda fraction, message: None)
@@ -142,6 +146,8 @@ def render_plan(plan: EditPlan, destination: str | Path, work_dir: str | Path, p
         report(done / total * 0.95, f"Montando bloco {number}/{len(parts)}")
         file = cache / f"{segment_key(part, plan, encoder)}.mp4"
         if not file.is_file():
+            if before_segment:
+                before_segment()
             partial = file.with_name(f".{file.name}")
             run_ffmpeg(segment_command(part, plan, encoder), output=partial, error=f"falha ao montar o bloco {number}")
             partial.replace(ensure_writable(file))

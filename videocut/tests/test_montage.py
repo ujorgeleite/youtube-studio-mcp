@@ -73,8 +73,11 @@ def test_render_produces_final_video_with_expected_duration(media_dir: Path, tmp
     monkeypatch.setattr(render, "video_encoder", lambda: ["-c:v", "libx264", "-preset", "ultrafast"])
     plan = build_edit_plan("A", _video(), _takes(media_dir), output=OutputFormat(320, 180, 25))
     events = []
+    waits = []
     output = render.render_plan(plan, tmp_path / "videos" / "montagem.mp4", tmp_path / "work",
-                                progress=lambda fraction, message: events.append(message))
+                                progress=lambda fraction, message: events.append(message),
+                                before_segment=lambda: waits.append(1))
+    assert len(waits) == 3
     info = probe(output)
     assert info.duration_s == pytest.approx(6, abs=0.15)
     assert (info.width, info.height, info.fps, info.has_audio) == (320, 180, 25.0, True)
@@ -83,8 +86,9 @@ def test_render_produces_final_video_with_expected_duration(media_dir: Path, tmp
     assert len(segments) == 3
 
     reordered = build_edit_plan("A", _video(), _takes(media_dir), ReviewState(order=["a1.b03", "a1.b01", "a1.b02"]), OutputFormat(320, 180, 25))
-    render.render_plan(reordered, tmp_path / "videos" / "reordenado.mp4", tmp_path / "work")
+    render.render_plan(reordered, tmp_path / "videos" / "reordenado.mp4", tmp_path / "work", before_segment=lambda: waits.append(1))
     assert len(list((tmp_path / "work" / "segments").glob("*.mp4"))) == 3
+    assert len(waits) == 3
 
 
 def test_render_rejects_empty_plan(tmp_path: Path):

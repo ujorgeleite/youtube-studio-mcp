@@ -33,6 +33,31 @@ def no_model_downloads(monkeypatch):
     monkeypatch.setattr("analysis.pipeline.ensure_model", lambda *args, **kwargs: None)
 
 
+@pytest.fixture(autouse=True)
+def cool_mac(monkeypatch):
+    """Nenhum teste lê o sensor real; quem precisa de calor injeta um leitor próprio."""
+    from core.thermal import ThermalReading
+    monkeypatch.setattr("core.thermal.read_thermal", lambda: ThermalReading(0, 50.0, 55.0))
+
+
+@pytest.fixture(autouse=True)
+def no_caffeinate(monkeypatch):
+    """Keep-awake é testado com processo falso; a suíte nunca segura o sono de verdade."""
+    class Idle:
+        def poll(self):
+            return None
+
+        def terminate(self):
+            pass
+
+        def wait(self, timeout=None):
+            return 0
+
+    monkeypatch.setattr("core.keepawake.KEEP_AWAKE.spawn", lambda *args, **kwargs: Idle())
+    monkeypatch.setattr("core.keepawake.KEEP_AWAKE.process", None)
+    monkeypatch.setattr("core.keepawake.KEEP_AWAKE.holders", 0)
+
+
 @pytest.fixture(scope="session")
 def media_dir(tmp_path_factory) -> Path:
     folder = tmp_path_factory.mktemp("raw")

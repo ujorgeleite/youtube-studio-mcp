@@ -21,7 +21,7 @@ STAGE_LABELS = {"pendente": "Na fila", "midia": "Preparando", "fala": "Transcrev
 async def start_analysis(shell: Shell) -> None:
     studio = shell.studio
     project = studio.project
-    if studio.busy or project is None:
+    if studio.busy or project is None or shell.refuse_if_working():
         return
     if not project.selected:
         shell.notify("Selecione pelo menos um take.", "warning")

@@ -67,6 +67,7 @@ def restore_original(shell: Shell, proposal: Proposal, video: StoryVideo) -> Non
         return
     proposal.videos[proposal.videos.index(video)] = source
     project.review[video.id] = ReviewState(order=[beat.id for beat in source.beats], active=source.beats[0].id)
+    shell.notify(f"Proposta original restaurada · {len(source.beats)} blocos", "positive")
     save(shell)
 
 
@@ -128,11 +129,19 @@ def preview_panel(shell: Shell, video: StoryVideo, review: ReviewState) -> None:
     project = shell.studio.project
     takes = {take.id: take for take in project.takes}
     beat = active_beat(video, review)
+
+    async def preview(label: str, beats: list[Beat]) -> None:
+        if shell.refuse_if_working():
+            return
+        with shell.activity(label) as step, shell.root:
+            await play(beats, takes, project.layout, "vc", step)
+            step("Tocando no player", 1.0)
+
     with ui.element("div").classes("w-full").style("border:1px solid #3b505c;border-radius:10px;overflow:hidden;background:#0c161f"):
         player("vc", "330px")
         with ui.row().classes("w-full items-center gap-3 p-3"):
-            theme.button("▷ Bloco", lambda: play([beat], takes, project.layout), small=True)
-            theme.button("▷ Sequência", lambda: play(ordered_beats(video, review), takes, project.layout), primary=True, small=True)
+            theme.button("▷ Bloco", lambda: preview(f"Prévia de {beat.title}", [beat]), small=True)
+            theme.button("▷ Sequência", lambda: preview("Prévia da sequência", ordered_beats(video, review)), primary=True, small=True)
             with ui.column().classes("gap-0 flex-grow"):
                 ui.label(f"{beat.take_id} · {beat.title}").classes("vc-small").style("font-weight:650")
                 ui.label(f"{span(beat.start_s, beat.end_s)} · {beat.audio}").classes("vc-tiny vc-muted")
@@ -184,6 +193,7 @@ def swap_dialog(shell: Shell, beat: Beat) -> None:
     def apply(moment) -> None:
         replace_moment(beat, moment, inventory)
         dialog.close()
+        shell.notify(f"“{beat.title}” agora usa {moment.id} · {span(beat.start_s, beat.end_s)}", "positive")
         save(shell)
 
     with shell.root, ui.dialog() as dialog, theme.panel().style("width:min(820px,calc(100vw - 35px));max-height:85vh;overflow:auto"):

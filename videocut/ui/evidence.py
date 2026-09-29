@@ -36,7 +36,7 @@ async def open_evidence(shell: Shell, evidence: Evidence, interpretation: str = 
                 ui.label(interpretation).classes("vc-muted")
         theme.note("A fala vem da transcrição e a imagem da análise visual deste trecho; nada aqui foi escrito pelo planejador.")
     dialog.open()
-    if take:
+    if take and not shell.working:
         clip = Beat("evidencia", "", "", evidence.take_id, evidence.start_s, evidence.end_s)
-        with shell.root:
-            await play([clip], {take.id: take}, project.layout, "vc-ev")
+        with shell.activity(f"Abrindo evidência de {take.id}") as step, shell.root:
+            await play([clip], {take.id: take}, project.layout, "vc-ev", step)

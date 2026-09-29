@@ -38,7 +38,7 @@ async def process(shell: Shell) -> None:
     project = studio.project
     proposal = chosen(shell)
     inventory = studio.inventory
-    if studio.busy or proposal is None or inventory is None:
+    if studio.busy or proposal is None or inventory is None or shell.refuse_if_working():
         return
     live = studio.delivery = {"running": True, "started": perf_counter(), "finished": 0.0, "fraction": {}, "message": "Preparando"}
     project.renders = {video.id: RenderRecord(video.id, QUEUED) for video in proposal.videos}
@@ -75,6 +75,11 @@ async def process(shell: Shell) -> None:
 def open_in_finder(path: str) -> None:
     """Arquivos são revelados no Finder; pastas são abertas."""
     subprocess.run(["open", "-R", path] if Path(path).is_file() else ["open", path], check=False)
+
+
+async def reveal(shell: Shell, path: str) -> None:
+    shell.notify(f"Abrindo no Finder: {Path(path).name}")
+    await run.io_bound(open_in_finder, path)
 
 
 def show_video(shell: Shell, path: str, title: str) -> None:
@@ -154,7 +159,7 @@ def live_content(shell: Shell, proposal) -> None:
                     back = theme.button("Voltar à revisão", lambda: shell.go(REVIEW), small=True)
                     if running:
                         back.disable()
-                    theme.button("Abrir pasta", lambda: run.io_bound(open_in_finder, str(project.layout.deliveries)), small=True)
+                    theme.button("Abrir pasta", lambda: reveal(shell, str(project.layout.deliveries)), small=True)
             theme.note("A timeline editável precisa de um teste real de importação no Filmora; o MP4 é a entrega de referência.")
 
 
@@ -181,4 +186,4 @@ def video_card(shell: Shell, number: int, video, beats, record: RenderRecord | N
             with ui.row().classes("gap-2 mt-2"):
                 theme.button("▷ Assistir", lambda _, p=record.artifacts["video"]: show_video(shell, p, video.title), small=True)
                 for key, name in (("video", "MP4"), ("report", "Relatório"), ("timeline", "Timeline XML"), ("subtitles", "SRT"), ("plan", "Plano")):
-                    theme.button(name, lambda _, p=record.artifacts[key]: run.io_bound(open_in_finder, p), small=True)
+                    theme.button(name, lambda _, p=record.artifacts[key]: reveal(shell, p), small=True)

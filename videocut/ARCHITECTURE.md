@@ -276,7 +276,11 @@ stateDiagram-v2
 | 4 Revisão | `ui/review.py` | edição do `ReviewState` e dos `Beat` | síncrono; prévia via `ui/player.js` |
 | 5 Entrega | `ui/delivery_view.py` | `process()` → `montage.delivery.deliver()` por vídeo | `run.io_bound`, um vídeo por vez |
 
-Moldura: `ui/shell.py` (`Shell.go`, `refresh`, `notify`, `on_live`). Chamadas
+Moldura: `ui/shell.py` (`Shell.go`, `refresh`, `notify`, `on_live`, `activity`).
+Toda ação que pode demorar roda dentro de `with shell.activity("…") as step:`
+(`ui/activity.py`): cartão fixo com spinner, o que está sendo feito, detalhe do
+passo, cronômetro e barra de progresso; ao terminar mostra "concluído em X s" ou
+o erro. Enquanto ele roda, `shell.refuse_if_working()` bloqueia outra ação lenta. Chamadas
 de UI feitas depois de um `await` passam por `shell.root`, porque o botão que
 disparou a ação pode ter sido recriado.
 
@@ -439,6 +443,7 @@ suíte cobre cada item (`make test`, sem baixar modelos).
 12. Blocos protegidos nunca saem na versão mais curta. (`test_shorten_never_removes_protected_beats`)
 13. Qualquer edição na revisão invalida `project.renders`. (`ui/review.py::save`)
 14. A interface e a CLI rodam offline: `enable_offline()` antes de qualquer import de `huggingface_hub`; só o downloader liga a rede. (verificado com proxy inexistente; ver `PLANO.md`)
+16. Toda ação demorada da UI tem feedback visual (o que faz, tempo, loader). (`tests/test_activity.py`)
 15. Download de modelo nunca trava a análise: sem bytes por 90 s, o subprocesso é encerrado e retomado; após 5 tentativas, erro claro. (`tests/test_models.py`)
 
 ## 11. Pontos em aberto

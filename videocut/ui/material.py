@@ -26,13 +26,18 @@ async def open_folder(shell: Shell, folder: str, output: str) -> None:
     if not folder.strip():
         shell.notify("Informe a pasta com os takes.", "warning")
         return
+    if shell.refuse_if_working():
+        return
     try:
         project = Project.open(folder.strip(), output.strip() or None)
     except SourceProtectionError as error:
         shell.notify(str(error), "negative")
         return
     try:
-        takes, errors = await run.io_bound(catalog_folder, project.folder, project.layout.thumbnails, project.takes)
+        with shell.activity(f"Carregando {Path(project.folder).name}") as step:
+            step("Listando vídeos da pasta")
+            takes, errors = await run.io_bound(catalog_folder, project.folder, project.layout.thumbnails, project.takes, step)
+            step(f"{len(takes)} vídeo(s) prontos" + (f" · {len(errors)} ignorado(s)" if errors else ""), 1.0)
     except MediaError as error:
         shell.notify(str(error), "negative")
         return
@@ -76,7 +81,12 @@ def source_panel(shell: Shell) -> None:
             output = ui.input("Saída", value=project.output_dir if project else "").classes("vc-field flex-grow").props("outlined dense")
 
             async def browse() -> None:
-                chosen = await run.io_bound(choose_directory)
+                if shell.refuse_if_working():
+                    return
+                with shell.activity("Escolhendo a pasta") as step:
+                    step("Selecione a pasta no Finder (a janela pode abrir atrás do navegador)")
+                    chosen = await run.io_bound(choose_directory)
+                    step(chosen or "Nenhuma pasta escolhida")
                 if chosen:
                     folder.value = chosen.rstrip("/")
                     output.value = str(default_output_dir(folder.value))

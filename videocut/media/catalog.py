@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from typing import Callable
 
 from core.schema import Take
 
@@ -40,13 +41,21 @@ def next_take_index(known: list[Take]) -> int:
     return max(numbers, default=0) + 1
 
 
-def catalog_folder(folder: str | Path, thumbnails: Path, known: list[Take] | None = None) -> tuple[list[Take], dict[str, str]]:
+def catalog_folder(
+    folder: str | Path,
+    thumbnails: Path,
+    known: list[Take] | None = None,
+    progress: Callable[[str, float], None] | None = None,
+) -> tuple[list[Take], dict[str, str]]:
     """Cataloga os vídeos da pasta; arquivos ilegíveis voltam em `failed` sem parar os demais."""
     by_path = {take.path: take for take in known or []}
     takes: list[Take] = []
     failed: dict[str, str] = {}
     counter = next_take_index(known or [])
-    for path in list_videos(folder):
+    paths = list_videos(folder)
+    for index, path in enumerate(paths):
+        if progress:
+            progress(f"Lendo {index + 1}/{len(paths)} · {path.name}", index / len(paths))
         previous = by_path.get(str(path.resolve()))
         try:
             takes.append(catalog_take(counter, path, thumbnails, previous))

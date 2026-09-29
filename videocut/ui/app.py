@@ -17,7 +17,7 @@ from ui.preview import install_player  # noqa: E402
 from ui.shell import Shell  # noqa: E402
 from ui.state import ANALYSIS, DELIVERY, MATERIAL, REVIEW, STORIES, STUDIO  # noqa: E402
 
-PORT = 8090
+PORT = int(os.environ.get("VIDEOCUT_PORT", "8090"))
 
 RENDERERS = {
     MATERIAL: material.render,

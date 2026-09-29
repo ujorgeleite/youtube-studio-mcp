@@ -68,6 +68,7 @@ body{background:var(--bg);color:#eaf0f7;font:15px/1.5 Inter,system-ui,-apple-sys
 .vc-field .q-field__control{background:#111c26;border-radius:8px}
 .vc-field .q-field__label,.vc-field .q-field__native,.vc-field .q-field__input{color:#eaf0f7}
 .q-checkbox__inner{color:var(--mint)}
+.vc-activity{position:fixed;right:22px;bottom:22px;z-index:6000;width:min(420px,calc(100vw - 32px));background:#111c26;border:1px solid #498573;border-radius:12px;padding:12px 16px;box-shadow:0 14px 36px rgba(0,0,0,.45)}
 .warn{color:var(--amber)} .check{color:var(--mint)} .bad{color:var(--red)}
 @media(max-width:1000px){.vc-layout{grid-template-columns:1fr}.vc-shell{padding:18px}}
 @media(max-width:650px){.vc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.vc-nav{flex-wrap:wrap}.vc-metrics{gap:8px}.vc-h1{font-size:26px}}

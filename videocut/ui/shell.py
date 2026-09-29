@@ -7,6 +7,7 @@ from typing import Callable
 
 from nicegui import ui
 
+from . import activity as activity_view
 from . import theme
 from .state import PAGES, Studio
 
@@ -19,6 +20,8 @@ class Shell:
         self.renderers = renderers
         self.live_hooks: list[Callable[[], None]] = []
         self.root: ui.element | None = None
+        self.activity_state = activity_view.ActivityState()
+        self._card_shown = False
 
     def go(self, page: int) -> None:
         self.studio.page = page
@@ -36,12 +39,33 @@ class Shell:
         with self.root:
             ui.notify(message, type=kind, multi_line=True)
 
+    def activity(self, label: str) -> activity_view.Activity:
+        return activity_view.Activity(self.activity_state, label, self.activity_card.refresh)
+
+    @property
+    def working(self) -> bool:
+        """Ação demorada em curso: novos cliques lentos esperam ela terminar."""
+        return self.activity_state.running
+
+    def refuse_if_working(self) -> bool:
+        if self.working:
+            self.notify(f"Aguarde: {self.activity_state.label.lower()} ainda está em andamento.", "warning")
+            return True
+        return False
+
+    @ui.refreshable_method
+    def activity_card(self) -> None:
+        activity_view.render(self.activity_state)
+
     def on_live(self, hook: Callable[[], None]) -> None:
         self.live_hooks.append(hook)
 
     def tick(self) -> None:
         for hook in list(self.live_hooks):
             hook()
+        if self.activity_state.visible or self._card_shown:
+            self.activity_card.refresh()
+        self._card_shown = self.activity_state.visible
 
     @ui.refreshable_method
     def nav(self) -> None:
@@ -76,4 +100,5 @@ class Shell:
             with ui.element("footer").classes("vc-footer w-full"):
                 theme.eyebrow("VideoCut v0.1")
                 ui.label("Fatos com timestamp primeiro, interpretação editorial depois. Nada é enviado para fora do seu Mac.")
+        self.activity_card()
         ui.timer(0.5, self.tick)

@@ -268,3 +268,9 @@ def test_overnight_on_battery_asks_before_starting(media_dir: Path, tmp_path: Pa
             assert studio.monitor is None and not studio.analyzing
 
     asyncio.run(exercise())
+
+
+def test_reopened_project_without_catalog_asks_to_load(media_dir: Path, tmp_path: Path):
+    project = Project.open(media_dir, tmp_path / "novo")
+    assert material.empty_folder_message(project) == "3 vídeo(s) nesta pasta ainda não foram lidos. Clique em Carregar."
+    assert "não foi encontrada" in material.empty_folder_message(Project(folder=str(tmp_path / "sumiu"), output_dir=str(tmp_path / "o")))

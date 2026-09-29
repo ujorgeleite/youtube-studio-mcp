@@ -11,7 +11,7 @@ from core.power import on_ac_power
 from core.project import STAGE_FAILED, STAGE_READY
 from core.timefmt import stopwatch
 
-from . import power_view, theme, thermal_view
+from . import memory_view, power_view, theme, thermal_view
 from .shell import Shell
 from .state import ANALYSIS, MATERIAL, STORIES
 
@@ -29,6 +29,9 @@ async def start_analysis(shell: Shell) -> None:
         shell.notify("Selecione pelo menos um take.", "warning")
         return
     if project.overnight and await run.io_bound(on_ac_power) is False and not await confirm_on_battery(shell):
+        return
+    if not await memory_view.confirm_low_memory(shell, project.model or None):
+        shell.go(MATERIAL)
         return
     studio.monitor = AnalysisMonitor()
     studio.analyzing = True
@@ -101,6 +104,7 @@ def live_content(shell: Shell) -> None:
                 thermal_view.render(monitor.thermal)
                 if studio.analyzing:
                     power_view.awake_badge(project)
+                    memory_view.live_line(project.model or None)
                 for index, name in enumerate(STAGES):
                     done = monitor.stage > index or (monitor.stage == index and not studio.analyzing and not monitor.error)
                     current = monitor.stage == index and studio.analyzing

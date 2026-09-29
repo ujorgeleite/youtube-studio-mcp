@@ -41,6 +41,16 @@ def cool_mac(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def roomy_memory(monkeypatch):
+    """Nenhum teste lê a memória real nem abre o aviso de pouca memória por acaso."""
+    from core.memory import GB, AppMemory, MemoryStatus
+    healthy = MemoryStatus(total=24 * GB, available=16 * GB, swap_used=0, pressure=1,
+                           apps=[AppMemory("Navegador", 2 * GB, 10)])
+    monkeypatch.setattr("ui.memory_view.memory_status", lambda *args, **kwargs: healthy)
+    monkeypatch.setattr("ui.memory_view._cache", {"full": None, "quick": None}, raising=False)
+
+
+@pytest.fixture(autouse=True)
 def no_caffeinate(monkeypatch):
     """Keep-awake é testado com processo falso; a suíte nunca segura o sono de verdade."""
     class Idle:

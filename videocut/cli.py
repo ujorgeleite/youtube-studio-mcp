@@ -18,6 +18,7 @@ from analysis.pipeline import Analysis, AnalysisMonitor, load_inventory  # noqa:
 from analysis.speech import transcribe_take  # noqa: E402
 from core.config import min_take_s, model_cached, models, vision_options  # noqa: E402
 from core.keepawake import KEEP_AWAKE  # noqa: E402
+from core.memory import freeing_steps, gb_text, memory_status, required_gb  # noqa: E402
 from core.offline import enable_offline  # noqa: E402
 from core.power import power_checklist  # noqa: E402
 from core.project import Project  # noqa: E402
@@ -41,10 +42,7 @@ def doctor(_: argparse.Namespace) -> int:
         except ImportError:
             ok = False
             print(f"✗ python: {module} ausente (make install)")
-    memory = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True).stdout.strip()
-    if memory.isdigit():
-        gigabytes = int(memory) / 1024 ** 3
-        print(f"✓ memória: {gigabytes:.0f} GB" + ("  (8B recomendado)" if gigabytes >= 16 else "  (use o 4B)"))
+    print_memory(None)
     repos = {"whisper": models().get("whisper", "")} | {key: value["repo"] for key, value in vision_options().items()}
     for key, repo in repos.items():
         print(f"{'✓' if model_cached(repo) else '·'} modelo {key}: {repo}" + ("" if model_cached(repo) else " (baixa na primeira análise)"))
@@ -59,6 +57,22 @@ def doctor(_: argparse.Namespace) -> int:
         print(f"  {marks[item.status]} {item.label}: {item.detail}")
     print("Pronto." if ok else "Corrija os itens com ✗.")
     return 0 if ok else 1
+
+
+def print_memory(model_key: str | None) -> str:
+    status = memory_status()
+    needed = required_gb(model_key)
+    level = status.level(needed)
+    mark = {"ok": "✓", "apertado": "◷", "critico": "✗"}[level]
+    print(f"{mark} memória: livre {gb_text(status.available_gb)} de {gb_text(status.total_gb)} · swap {gb_text(status.swap_gb)} "
+          f"· pressão {status.pressure_label} · modelo precisa de ~{needed:g} GB")
+    for app in status.apps[:5]:
+        print(f"    {app.name}: {gb_text(app.gb)}")
+    if level != "ok":
+        print("  Como liberar:")
+        for number, step in enumerate(freeing_steps(status, needed), start=1):
+            print(f"    {number}. {step}")
+    return level
 
 
 def download_models(args: argparse.Namespace) -> int:
@@ -95,6 +109,7 @@ def analyze(args: argparse.Namespace) -> int:
     project.long_run = args.long_run or project.long_run
     project.overnight = args.overnight or project.overnight
     project.save()
+    print_memory(project.model or None)
     if project.overnight:
         for item in power_checklist(os.getpid()):
             if item.ok is False:

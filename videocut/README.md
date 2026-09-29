@@ -87,6 +87,16 @@ make benchmark INPUT=/caminho/raw MODELS=qwen3-vl-4b,qwen3-vl-8b
 recall, precisão e concordância de ordem. `benchmark` mede tempo, memória de
 pico e respostas inválidas de cada modelo, com descrições lado a lado.
 
+## Memória do Mac
+
+O painel **Memória do Mac** (tela Material) mostra a memória livre, o swap, a
+pressão de memória e os apps que mais ocupam (somando os processos auxiliares
+de cada um, como no Monitor de Atividade), com um passo a passo para liberar.
+O modelo 8B precisa de ~8 GB livres e o 4B de ~5 GB (`config/modelos.yaml`).
+Com memória apertada, o macOS usa o disco (swap) e a análise pode levar o
+dobro do tempo; por isso o app avisa antes de começar. `make doctor` mostra o
+mesmo relatório.
+
 ## Rodar de madrugada
 
 Painel **Execução** da tela Material → **Rodar de madrugada** (e, de

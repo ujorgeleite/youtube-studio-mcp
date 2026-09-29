@@ -12,9 +12,9 @@ from core.safety import SourceProtectionError
 from core.thermal import LongRunConfig
 from core.timefmt import clock
 from media.catalog import catalog_folder
-from media.probe import MediaError
+from media.probe import MediaError, list_videos
 
-from . import power_view, theme
+from . import memory_view, power_view, theme
 from .analysis_view import start_analysis
 from .filepicker import choose_directory
 from .media import media_url
@@ -53,6 +53,17 @@ async def open_folder(shell: Shell, folder: str, output: str) -> None:
     shell.refresh()
 
 
+def empty_folder_message(project: Project) -> str:
+    """Projeto reaberto sem catálogo salvo não é o mesmo que pasta vazia."""
+    try:
+        count = len(list_videos(project.folder))
+    except MediaError:
+        return "A pasta de origem não foi encontrada. Escolha a pasta de novo."
+    if count:
+        return f"{count} vídeo(s) nesta pasta ainda não foram lidos. Clique em Carregar."
+    return "Nenhum vídeo encontrado nesta pasta."
+
+
 def render(shell: Shell) -> None:
     studio = shell.studio
     project = studio.project
@@ -65,11 +76,12 @@ def render(shell: Shell) -> None:
                 take_grid(shell)
             elif project:
                 with theme.panel():
-                    ui.label("Nenhum vídeo encontrado nesta pasta.").classes("vc-muted")
+                    ui.label(empty_folder_message(project)).classes("vc-muted")
         with theme.stack():
             if project and project.takes:
                 intention_panel(shell)
                 execution_panel(shell)
+            memory_view.memory_panel(shell, project.model if project else None)
             with theme.panel():
                 theme.eyebrow("Uma decisão de cada vez")
                 ui.label("Primeiro entender o material. Depois escolher a história. Só então montar.").classes("vc-muted vc-small")
@@ -189,8 +201,12 @@ def intention_panel(shell: Shell) -> None:
                   on_change=lambda event: update("format", event.value)).classes("vc-field w-full mt-3").props("outlined dense")
         ui.number("Duração desejada (min, opcional)", value=project.target_minutes, min=0.5, step=0.5,
                   on_change=lambda event: update("target_minutes", event.value or None)).classes("vc-field w-full mt-3").props("outlined dense")
+        def pick_model(value: str) -> None:
+            update("model", value)
+            shell.main.refresh()
+
         ui.select(options, label="Modelo visual local", value=project.model or default_model,
-                  on_change=lambda event: update("model", event.value)).classes("vc-field w-full mt-3").props("outlined dense")
+                  on_change=lambda event: pick_model(event.value)).classes("vc-field w-full mt-3").props("outlined dense")
         with ui.column().classes("gap-1 mt-4"):
             ui.label("O que você recebe").classes("vc-h3")
             ui.label("✓ Inventário de falas e imagens\n✓ Propostas de um ou vários vídeos\n✓ Lacunas e evidências de cada ideia").classes("vc-small").style("white-space:pre-line")

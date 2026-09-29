@@ -449,6 +449,7 @@ suíte cobre cada item (`make test`, sem baixar modelos).
 18. Enquanto análise ou render rodam, o Mac não dorme (`caffeinate -i -m -s -w <pid>`), e o bloqueio termina junto com o trabalho, inclusive em erro. Nenhum ajuste do macOS é alterado. (`tests/test_power.py`)
 19. Takes novos mais curtos que `material.min_take_s` chegam desmarcados; escolhas salvas nunca são sobrescritas. (`test_merge_takes_deselects_only_new_short_takes`)
 20. O progresso da análise é salvo após cada take descrito: uma interrupção nunca apaga o que já foi feito. (`analysis/pipeline.py::Analysis.describe`)
+21. Antes de analisar, se a memória livre não comporta o modelo escolhido (ou há swap alto/pressão), o app mostra quem ocupa memória e pede confirmação; nunca encerra apps sozinho. (`tests/test_memory.py`)
 
 ## 11. Pontos em aberto
 

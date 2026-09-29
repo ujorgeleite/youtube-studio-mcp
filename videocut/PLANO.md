@@ -19,7 +19,7 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 - [x] **8. UI Material + Análise** — telas 1–2, análise em background por take
 - [x] **9. UI Histórias + Revisão** — telas 3–4, evidências, blocos, troca de vídeo, versão mais curta
 - [x] **10. UI Entrega** — tela 5, render em background, relatório em formação
-- [ ] **11. Prova com episódio real** — comparador com edição existente, benchmark 4B × 8B, doctor, docs
+- [x] **11. Prova com episódio real** — comparador com edição existente, benchmark 4B × 8B, doctor, docs
 
 ## Registro
 
@@ -36,3 +36,11 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 | 8 | concluída | `analysis/pipeline.py` (Whisper em todos → libera → VLM → planejador, cancelável, falha por take). UI: `ui/shell.py` (moldura, `notify` no root para callbacks pós-await), `material.py`, `analysis_view.py`, `/media/<chave>` (LRF como video/mp4). `make ui` → http://localhost:8090. Verificado no navegador com Whisper real + modelo visual roteirizado (script de demo fora do repo). |
 | 9 | concluída | `stories.py` (veredito, lacunas, propostas, critérios com evidência, itens descartados), `review.py` (faixas imagem/apoio/áudio, excluir/restaurar/mover/proteger, ±frase, trocar trecho, versão mais curta, restaurar original), `evidence.py` e `player.js` (prévia da sequência com B-roll sobreposto, sem render). Verificado no navegador. |
 | 10 | concluída | `delivery_view.py`: render em background por vídeo, cronômetro, progresso, falha isolada por vídeo, card vira relatório com Assistir/MP4/Relatório/XML/SRT/Plano (revela no Finder). `project.renders` persistido e invalidado ao editar a revisão. Verificado no navegador: 20 s em 1080p em ~2 s. |
+| 11 | concluída (ferramentas) | `proof/compare.py` (alinha falas da edição final com os takes: recall, precisão, ordem), `proof/benchmark.py` (tempo, memória de pico, JSON inválido, descrições lado a lado), `cli.py` + `make doctor/analyze/compare/benchmark`. Sanidade: montagem × ela mesma = 100%. |
+
+## Pendências que dependem de você
+
+1. Autorizar o download do Qwen3-VL (4B 3,1 GB e/ou 8B 5,8 GB) — primeira análise real ou `make benchmark`.
+2. Rodar `make analyze` + `make compare` com um episódio já editado para medir a proposta contra a sua edição.
+3. Importar um `timelines/*__timeline.xml` no seu Filmora e confirmar se V1/V2/A1/A2 chegam corretos.
+4. Ajustar `config/canal.yaml` e `prompts/historias.md` a partir do que a comparação mostrar.

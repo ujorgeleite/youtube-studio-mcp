@@ -2,8 +2,12 @@ VENV   := .venv
 PYTHON := $(VENV)/bin/python
 PIP    := $(PYTHON) -m pip
 
+INPUT  ?= ./raw
+EDIT   ?= ./edicao-final.mp4
+MODELS ?= qwen3-vl-4b,qwen3-vl-8b
+
 .DEFAULT_GOAL := help
-.PHONY: help install test test-verbose ui check-ffmpeg clean
+.PHONY: help install doctor test test-verbose ui analyze compare benchmark check-ffmpeg clean
 
 help: ## List available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -15,6 +19,9 @@ $(PYTHON):
 install: $(PYTHON) ## Create the venv and install dependencies
 	$(PIP) install -q -r requirements.txt
 
+doctor: ## Check ffmpeg, dependencies, memory and cached models
+	$(PYTHON) cli.py doctor
+
 test: ## Run the tests (no model downloads, no real inference)
 	$(PYTHON) -m pytest -q
 
@@ -23,6 +30,15 @@ test-verbose: ## Run the tests with full output
 
 ui: check-ffmpeg ## Launch the VideoCut interface (http://localhost:8090)
 	$(PYTHON) ui/app.py
+
+analyze: check-ffmpeg ## Analyze a folder without the UI (INPUT=...)
+	$(PYTHON) cli.py analyze "$(INPUT)"
+
+compare: check-ffmpeg ## Compare the proposal with your finished edit (INPUT=... EDIT=...)
+	$(PYTHON) cli.py compare "$(INPUT)" "$(EDIT)"
+
+benchmark: check-ffmpeg ## Measure vision models on your takes (INPUT=... MODELS=...)
+	$(PYTHON) cli.py benchmark "$(INPUT)" --models "$(MODELS)"
 
 check-ffmpeg: ## Verify ffmpeg/ffprobe are installed on the system
 	@command -v ffmpeg >/dev/null 2>&1 || { echo "ffmpeg não encontrado no PATH (brew install ffmpeg)"; exit 1; }

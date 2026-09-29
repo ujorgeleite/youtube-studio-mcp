@@ -41,7 +41,27 @@ Nenhum vídeo original é alterado.
 | `analysis/` | Whisper, modelo visual, inventário de momentos |
 | `story/` | Planejador editorial, critérios de suficiência, validador determinístico |
 | `montage/` | Plano de montagem, render ffmpeg, legendas, timeline, pacote de entrega |
-| `ui/` | Interface NiceGUI em cinco etapas |
+| `ui/` | Interface NiceGUI em cinco etapas (`make ui`, porta 8090) |
+| `proof/` | Comparação com edição real e benchmark de modelos |
+| `cli.py` | `doctor`, `analyze`, `compare`, `benchmark` |
+
+## Decisões de implementação
+
+- O planejador cita **ids de momentos** (`T05.03`), não timestamps livres. O
+  validador (`story/validate.py`) descarta ids inexistentes, prende tempos ao
+  momento, expande cortes de fala para frases inteiras e troca citações que não
+  existem pela transcrição real. Critérios estruturais (`story/criteria.py`)
+  nunca podem ser “melhorados” pelo modelo: vale o status mais severo.
+- A resposta bruta do planejador fica em cache; melhorar o validador não exige
+  rodar o modelo de novo.
+- Render por segmento: cada bloco vira um MP4 normalizado (leitura com `-ss/-t`
+  na entrada) e os segmentos são concatenados sem recodificar. A chave de cache
+  usa só posições relativas ao bloco: reordenar reaproveita tudo.
+- Proxies `.LRF` da câmera entram em `Take.proxy`; `Take.analysis_path` é usado
+  para miniatura, cenas, frames, áudio da transcrição e prévia.
+- Callbacks da UI que continuam depois de um `await` usam `shell.notify` e
+  `shell.go`, que operam no contêiner raiz (o botão original pode ter sido
+  recriado).
 
 ## Saída
 
@@ -61,5 +81,6 @@ raw__videocut/
 ## Testes
 
 `make test` não baixa modelos nem executa inferência real. Mídia de teste é
-gerada com `ffmpeg -f lavfi`. Qualidade editorial é validada com material real
-(fase 11), não pela suíte.
+gerada com `ffmpeg -f lavfi`; a UI é exercitada montando as páginas NiceGUI em
+memória. Qualidade editorial é validada com material real (`make compare` e
+`make benchmark`), não pela suíte.

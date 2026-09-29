@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import gc
+import json
+import time
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
+
+from core.safety import ensure_writable
 
 from .jsontext import JsonTextError, parse_json
 
@@ -49,6 +54,33 @@ class ThermalGuardedModel:
     def generate(self, prompt: str, images: list[Path] | None = None, max_tokens: int = 700) -> str:
         self.governor.wait_if_hot()
         return self.inner.generate(prompt, images, max_tokens)
+
+    def release(self) -> None:
+        self.inner.release()
+
+
+class RecordingModel:
+    """Guarda cada pedido e resposta em JSONL: é o que se lê para ajustar prompts e regras."""
+
+    def __init__(self, inner: LocalModel, log_file: Path, stage: Callable[[], str]):
+        self.inner = inner
+        self.log_file = log_file
+        self.stage = stage
+
+    @property
+    def name(self) -> str:
+        return self.inner.name
+
+    def generate(self, prompt: str, images: list[Path] | None = None, max_tokens: int = 700) -> str:
+        started = time.perf_counter()
+        answer = self.inner.generate(prompt, images, max_tokens)
+        record = {"hora": datetime.now().isoformat(timespec="seconds"), "etapa": self.stage(), "modelo": self.name,
+                  "imagens": [Path(image).name for image in images or []], "segundos": round(time.perf_counter() - started, 2),
+                  "prompt": prompt, "resposta": answer}
+        self.log_file.parent.mkdir(parents=True, exist_ok=True)
+        with ensure_writable(self.log_file).open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+        return answer
 
     def release(self) -> None:
         self.inner.release()

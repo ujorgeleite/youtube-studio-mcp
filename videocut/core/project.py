@@ -106,6 +106,7 @@ class Project:
     target_minutes: float | None = None
     long_run: bool = False
     overnight: bool = False
+    skills: list[str] = field(default_factory=list)
     takes: list[Take] = field(default_factory=list)
     selected: list[str] = field(default_factory=list)
     status: dict[str, TakeStatus] = field(default_factory=dict)

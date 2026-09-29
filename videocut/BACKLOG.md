@@ -8,8 +8,9 @@ marque `[x]` ao concluir (com `make test` verde e commit) e registre em `PLANO.m
 - [x] **3. Manter o Mac acordado durante o trabalho** — `18fe739`
 - [x] **4. Seletor “Rodar de madrugada” (sem senha)** — `16cdd85`
 - [ ] **5. Acelerar a visão sem perder qualidade** — só depois do A/B no Episódio06
-- [ ] **6. Área de Configurações com os prompts editáveis**
-- [ ] **7. Skills e agentes configuráveis na área de Configurações** — depende do item 6
+- [x] **6. Área de Configurações com os prompts editáveis** — falta checagem visual no navegador
+- [x] **7. Skills e agentes configuráveis na área de Configurações** — falta checagem visual no navegador
+- [ ] **8. Próximos ajustes de contexto e guardrails** — ver sugestões na resposta de 29/09 (exemplos aprovados como few-shot, painel de orçamento de tokens, regras proibidas por vídeo, comparação A/B de prompts)
 
 ## Contexto
 

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from core import settings
 from core.cache import StageCache, fingerprint
 from core.config import sampling
 from core.schema import Take, Transcript, VisualObservation
@@ -14,13 +15,13 @@ from media.frames import broad_sample_times, extract_frames, merge_times, scene_
 
 from .vlm import LocalModel, ModelError, generate_json
 
-PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 SEVERE_ISSUES = {"tela_preta", "obstruido"}
 Progress = Callable[[float, str], None]
 
 
 def load_prompt(name: str) -> str:
-    return (PROMPTS / f"{name}.md").read_text(encoding="utf-8")
+    """Texto editado em Configurações, se houver; senão o padrão de `prompts/`."""
+    return settings.read(name)
 
 
 @dataclass

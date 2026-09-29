@@ -276,3 +276,29 @@ def test_reopened_project_without_catalog_asks_to_load(media_dir: Path, tmp_path
     project = Project.open(media_dir, tmp_path / "novo")
     assert material.empty_folder_message(project) == "3 vídeo(s) nesta pasta ainda não foram lidos. Clique em Carregar."
     assert "não foi encontrada" in material.empty_folder_message(Project(folder=str(tmp_path / "sumiu"), output_dir=str(tmp_path / "o")))
+
+
+def test_settings_page_shows_editables_skills_agents_and_log(tmp_path: Path, monkeypatch):
+    from ui import settings_view
+    from ui.settings_preview import build_preview
+    studio = _story_studio(tmp_path, monkeypatch)
+    renderers = {**_renderers(), 5: settings_view.render}
+
+    async def exercise():
+        monkeypatch.setattr(core, "loop", asyncio.get_running_loop())
+        with Client(page("/settings-test")) as client:
+            shell = Shell(studio, renderers)
+            shell.build()
+            shell.go(5)
+            await asyncio.sleep(0.05)
+            texts = _texts(client)
+            assert "O que a IA recebe, e como" in texts and "Blocos de cada capítulo" in texts and "Estilo de cena" in texts
+            for tab, expected in (("Skills", "Vlog rápido"), ("Agentes", "Revisor de ritmo"), ("Registro de chamadas", "Registro de chamadas")):
+                studio.settings["tab"] = tab
+                shell.main.refresh()
+                await asyncio.sleep(0.05)
+                assert expected in _texts(client)
+
+    asyncio.run(exercise())
+    preview = build_preview(studio, "capitulos", settings_view.settings.read("capitulos"))
+    assert "Takes em ordem cronológica" in preview and "{takes}" not in preview

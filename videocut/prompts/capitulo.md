@@ -5,6 +5,9 @@ Capítulo {numero} de {total}: {capitulo} (papel: {papel})
 Duração desejada deste capítulo: cerca de {duracao}
 Regras do canal: {regras}
 
+Skills ativas (siga estas instruções):
+{skills}
+
 ## Momentos do capítulo, em ordem
 Cada linha: id | intervalo | tipo | fala | imagem | interesse.
 Tipos: fala; acao (ação sem fala, pode entrar sozinha com som ambiente);

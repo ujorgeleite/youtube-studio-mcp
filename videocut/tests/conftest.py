@@ -41,6 +41,21 @@ def cool_mac(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def isolated_settings(tmp_path, monkeypatch):
+    """Edições de prompts, skills e agentes feitas nos testes nunca tocam `.state/ajustes` real."""
+    from core import extensions, settings
+    from core.config import load_yaml
+    overrides = tmp_path / "ajustes"
+    monkeypatch.setattr(settings, "OVERRIDES", overrides)
+    monkeypatch.setattr(settings, "HISTORY", overrides / "historico")
+    for registry in (extensions.SKILLS, extensions.AGENTS):
+        monkeypatch.setattr(registry, "user_dir", overrides / registry.kind)
+    load_yaml.cache_clear()
+    yield
+    load_yaml.cache_clear()
+
+
+@pytest.fixture(autouse=True)
 def roomy_memory(monkeypatch):
     """Nenhum teste lê a memória real nem abre o aviso de pouca memória por acaso."""
     from core.memory import GB, AppMemory, MemoryStatus

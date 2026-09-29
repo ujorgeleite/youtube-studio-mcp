@@ -9,7 +9,7 @@ from nicegui import ui
 
 from . import activity as activity_view
 from . import theme
-from .state import PAGES, Studio
+from .state import PAGES, SETTINGS, Studio
 
 Renderer = Callable[["Shell"], None]
 
@@ -94,6 +94,9 @@ class Shell:
             ui.label("/ montagem por conteúdo").classes("vc-muted gt-sm")
             ui.space()
             theme.pill("100% local · originais preservados")
+            settings_button = theme.button("⚙ Configurações", lambda: self.go(SETTINGS), small=True)
+            if self.studio.busy:
+                settings_button.disable()
         with ui.column().classes("vc-shell gap-0") as self.root:
             self.nav()
             self.main()

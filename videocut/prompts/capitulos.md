@@ -8,6 +8,9 @@ capítulo serão escolhidos depois, um capítulo por vez.
 ## Regras editoriais do canal
 {regras}
 
+## Skills ativas (siga estas instruções)
+{skills}
+
 ## Pedido de quem gravou
 Intenção: {intencao}
 Formato: {formato}

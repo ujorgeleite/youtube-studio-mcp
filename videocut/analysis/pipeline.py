@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from time import perf_counter
 from typing import Callable
 
 from core.cache import is_cached
 from core.config import models, vision_repo
+from core.extensions import AGENTS
 from core.project import (
     STAGE_FAILED, STAGE_MEDIA, STAGE_PENDING, STAGE_READY, STAGE_SPEECH, STAGE_VISION, Project, TakeStatus,
 )
@@ -23,13 +25,14 @@ from core.serial import from_data, read_json, write_json
 from core.thermal import ThermalGovernor
 from media.audio import extract_speech_audio
 from media.probe import MediaError, probe
+from story.agents import run_agent
 from story.planner import plan_stories
 
 from .inventory import build_inventory
 from .models import ensure_model
 from .speech import release_model, transcribe_take, transcript_variant
 from .vision import analyze_take_vision, vision_variant
-from .vlm import LocalModel, MlxModel, ThermalGuardedModel
+from .vlm import LocalModel, MlxModel, RecordingModel, ThermalGuardedModel
 
 STAGES = (
     "Preparar modelos, mídia e áudio",
@@ -239,7 +242,7 @@ class Analysis:
             transcripts = self.transcribe(takes, audio)
             project.save()
             self.monitor.message = "Carregando o modelo visual na memória…"
-            model = ThermalGuardedModel(self.model_factory(repo), self.governor)
+            model = self.load_model(repo)
             observations = self.describe(takes, transcripts, model)
             project.save()
             self.check_cancel()
@@ -264,7 +267,7 @@ class Analysis:
 
         report = plan_stories(
             inventory, model, project.layout.analysis, intention=project.intention, format_key=project.format,
-            target_minutes=project.target_minutes, refresh=self.refresh, progress=progress,
+            target_minutes=project.target_minutes, refresh=self.refresh, progress=progress, skills=project.skills,
         )
         write_json(project.layout.analysis / "historias.json", report)
         project.report = report
@@ -289,7 +292,7 @@ class Analysis:
             ensure_model(repo, "modelo visual (Qwen3-VL)", lambda fraction, message: setattr(self.monitor, "message", message))
             self.monitor.note(f"Reaproveitando a análise de {len(inventory.takes)} takes ({len(inventory.moments)} momentos)")
             self.monitor.message = "Carregando o modelo na memória…"
-            model = ThermalGuardedModel(self.model_factory(repo), self.governor)
+            model = self.load_model(repo)
             return self.plan(inventory, model)
         except Exception as error:
             self.monitor.error = str(error)
@@ -297,6 +300,34 @@ class Analysis:
             raise
         finally:
             self.finish(model)
+
+    def run_agents(self, keys: list[str], video_id: str) -> list[Path]:
+        """Roda agentes sobre a proposta escolhida; resultados ficam em `analise/agentes/`."""
+        project = self.project
+        proposal = project.report.proposal(project.chosen) if project.report and project.chosen else None
+        video = next((item for item in proposal.videos if item.id == video_id), None) if proposal else None
+        if video is None:
+            raise RuntimeError("escolha e revise uma proposta antes de rodar agentes")
+        agents = [agent for key in keys if (agent := AGENTS.get(key))]
+        self.monitor.started_at = perf_counter()
+        model: LocalModel | None = None
+        outputs: list[Path] = []
+        try:
+            self.monitor.message = "Carregando o modelo na memória…"
+            model = self.load_model(vision_repo(project.model or None))
+            for number, agent in enumerate(agents, start=1):
+                self.check_cancel()
+                self.monitor.message = f"Agente {number}/{len(agents)} · {agent.name}"
+                outputs.append(run_agent(agent, model, video, project.review.get(video.id), project.intention,
+                                         project.layout.analysis / "agentes"))
+            return outputs
+        finally:
+            self.finish(model)
+
+    def load_model(self, repo: str) -> LocalModel:
+        """Todo modelo passa pela pausa térmica e deixa registro do que recebeu e respondeu."""
+        log = self.project.layout.analysis / "registro" / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}.jsonl"
+        return RecordingModel(ThermalGuardedModel(self.model_factory(repo), self.governor), log, lambda: self.monitor.message)
 
     def finish(self, model: LocalModel | None) -> None:
         if model is not None:

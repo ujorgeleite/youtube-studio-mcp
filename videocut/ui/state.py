@@ -11,7 +11,7 @@ from core.schema import Inventory
 from core.serial import read_json, write_json
 
 PAGES = ("Material", "Análise", "Histórias", "Revisão", "Entrega")
-MATERIAL, ANALYSIS, STORIES, REVIEW, DELIVERY = range(5)
+MATERIAL, ANALYSIS, STORIES, REVIEW, DELIVERY, SETTINGS = range(6)
 LAST_PROJECT = Path(__file__).resolve().parents[1] / ".state" / "ultimo.json"
 
 
@@ -25,6 +25,7 @@ class Studio:
     inventory_cache: Inventory | None = None
     video_id: str | None = None
     delivery: dict = field(default_factory=dict)
+    settings: dict = field(default_factory=dict)
 
     @property
     def busy(self) -> bool:

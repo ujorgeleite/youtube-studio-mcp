@@ -12,10 +12,10 @@ enable_offline()
 
 from nicegui import ui  # noqa: E402
 
-from ui import analysis_view, delivery_view, material, media, review, stories  # noqa: E402,F401
+from ui import analysis_view, delivery_view, material, media, review, settings_view, stories  # noqa: E402,F401
 from ui.preview import install_player  # noqa: E402
 from ui.shell import Shell  # noqa: E402
-from ui.state import ANALYSIS, DELIVERY, MATERIAL, REVIEW, STORIES, STUDIO  # noqa: E402
+from ui.state import ANALYSIS, DELIVERY, MATERIAL, REVIEW, SETTINGS, STORIES, STUDIO  # noqa: E402
 
 PORT = int(os.environ.get("VIDEOCUT_PORT", "8090"))
 
@@ -25,6 +25,7 @@ RENDERERS = {
     STORIES: stories.render,
     REVIEW: review.render,
     DELIVERY: delivery_view.render,
+    SETTINGS: settings_view.render,
 }
 
 

@@ -26,6 +26,8 @@ class ScriptedModel:
             takes = [line.split(" | ")[0] for line in prompt.splitlines() if re.match(r"T\d+ \|", line)]
             return json.dumps({"veredito": "um_video", "resumo": "ok", "titulo": "Única",
                                "capitulos": [{"titulo": "Tudo", "takes": takes}]})
+        if "## Momentos do capítulo" not in prompt:
+            return "Resultado do agente."
         speech = next(line.split(" | ")[0] for line in prompt.splitlines() if " | fala | " in line)
         return json.dumps({"blocos": [{"momento": speech, "papel": "mensagem"}]})
 

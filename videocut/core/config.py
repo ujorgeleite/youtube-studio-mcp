@@ -5,13 +5,15 @@ from pathlib import Path
 
 import yaml
 
+from .settings import resolve
+
 CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
 HF_CACHE = Path.home() / ".cache" / "huggingface" / "hub"
 
 
 @lru_cache(maxsize=None)
 def load_yaml(name: str) -> dict:
-    path = CONFIG_DIR / name
+    path = resolve(name, CONFIG_DIR)
     if not path.is_file():
         return {}
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}

@@ -13,7 +13,9 @@ from typing import Any, Callable
 
 from analysis.vlm import LocalModel, ModelError, generate_json
 from core.cache import fingerprint
+from core import settings
 from core.config import load_yaml
+from core.extensions import skills_text
 from core.schema import SPEECH, Inventory, Moment, StoryReport
 from core.serial import read_json, write_json
 from core.timefmt import clock, span
@@ -23,7 +25,6 @@ from .chronology import BaseCut, base_cut, chronological, moment_block, recorded
 from .coherence import SceneRules, tidy
 from .validate import build_report
 
-PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 SPEECH_CHARS = 220
 CHAPTERS_MAX_TOKENS = 1500
 CHAPTER_MAX_TOKENS = 2200
@@ -156,15 +157,43 @@ def fill_broll(blocks: list[dict], moments: list[Moment], by_id: dict[str, Momen
         block["apoio"] = [{"momento": candidate.id}]
 
 
-def plan_chapter(model: LocalModel, cache_dir: Path, context: dict, video: str, chapter: dict, number: int, total: int,
-                 moments: list[Moment], cut: BaseCut, target_s: float | None, refresh: bool) -> list[dict]:
+def outline_values(inventory: Inventory, cut: BaseCut, intention: str = "", format_key: str = "auto",
+                   target_minutes: float | None = None, skills: list[str] | None = None) -> dict[str, str]:
+    context = channel_context()
+    return {
+        "canal": context["canal"], "regras": context["regras"], "skills": skills_text(skills or [], "capitulos"),
+        "intencao": intention.strip() or "não informada — descubra as possibilidades do material",
+        "formato": context["formatos"].get(format_key, format_key or context["formatos"].get("auto", "")),
+        "duracao": f"cerca de {target_minutes:g} minutos" if target_minutes else "livre, a que o material sustentar",
+        "takes": takes_overview(inventory, cut),
+    }
+
+
+def outline_prompt(inventory: Inventory, cut: BaseCut, intention: str = "", format_key: str = "auto",
+                   target_minutes: float | None = None, skills: list[str] | None = None) -> str:
+    return settings.read("capitulos").format(**outline_values(inventory, cut, intention, format_key, target_minutes, skills))
+
+
+def chapter_values(video: str, chapter: dict, number: int, total: int, moments: list[Moment], target_s: float | None,
+                   skills: list[str] | None = None) -> dict[str, object]:
+    return {
+        "video": video, "numero": number, "total": total, "capitulo": chapter["titulo"], "papel": chapter["papel"],
+        "duracao": clock(target_s) if target_s else "a que o material sustentar",
+        "regras": channel_context()["regras"].replace("\n", " "), "skills": skills_text(skills or [], "capitulo"),
+        "momentos": "\n".join(moment_line(moment) for moment in moments),
+    }
+
+
+def chapter_prompt(video: str, chapter: dict, number: int, total: int, moments: list[Moment], target_s: float | None,
+                   skills: list[str] | None = None) -> str:
+    return settings.read("capitulo").format(**chapter_values(video, chapter, number, total, moments, target_s, skills))
+
+
+def plan_chapter(model: LocalModel, cache_dir: Path, video: str, chapter: dict, number: int, total: int,
+                 moments: list[Moment], cut: BaseCut, target_s: float | None, refresh: bool, skills: list[str]) -> list[dict]:
     if not moments:
         return []
-    prompt = (PROMPTS / "capitulo.md").read_text(encoding="utf-8").format(
-        video=video, numero=number, total=total, capitulo=chapter["titulo"], papel=chapter["papel"],
-        duracao=clock(target_s) if target_s else "a que o material sustentar",
-        regras=context["regras"].replace("\n", " "), momentos="\n".join(moment_line(moment) for moment in moments),
-    )
+    prompt = chapter_prompt(video, chapter, number, total, moments, target_s, skills)
     try:
         raw = ask(model, prompt, cache_dir, f"capitulo{number:02d}", CHAPTER_MAX_TOKENS, refresh)
     except ModelError:
@@ -182,22 +211,17 @@ def plan_stories(
     target_minutes: float | None = None,
     refresh: bool = False,
     progress: Progress | None = None,
+    skills: list[str] | None = None,
 ) -> StoryReport:
     report_step = progress or (lambda message: None)
     cache = Path(cache_dir)
-    context = channel_context()
+    active = list(skills or [])
     cut = base_cut(inventory)
     moments = {moment.id: moment for moment in inventory.moments}
     target_s = target_minutes * 60 if target_minutes else None
 
     report_step("Dividindo o material em capítulos")
-    prompt = (PROMPTS / "capitulos.md").read_text(encoding="utf-8").format(
-        canal=context["canal"], regras=context["regras"],
-        intencao=intention.strip() or "não informada — descubra as possibilidades do material",
-        formato=context["formatos"].get(format_key, format_key or context["formatos"].get("auto", "")),
-        duracao=f"cerca de {target_minutes:g} minutos" if target_minutes else "livre, a que o material sustentar",
-        takes=takes_overview(inventory, cut),
-    )
+    prompt = outline_prompt(inventory, cut, intention, format_key, target_minutes, active)
     try:
         outline = ask(model, prompt, cache, "capitulos", CHAPTERS_MAX_TOKENS, refresh)
     except ModelError:
@@ -212,8 +236,8 @@ def plan_stories(
         report_step(f"Planejando capítulo {number}/{len(chapters)} · {chapter['titulo']}")
         pool = chapter_moments(cut, chapter["takes"])
         share = sum(moment.duration_s for moment in pool if moment.kind == SPEECH) / speech_total
-        chapter_results.append(plan_chapter(model, cache, context, title, chapter, number, len(chapters), pool, cut,
-                                            target_s * share if target_s else None, refresh))
+        chapter_results.append(plan_chapter(model, cache, title, chapter, number, len(chapters), pool, cut,
+                                            target_s * share if target_s else None, refresh, active))
 
     hook = moments.get(str(outline.get("gancho") or ""))
     report_step("Montando e validando a sequência")

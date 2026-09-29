@@ -12,6 +12,7 @@ regras:
   - Usar imagens de apoio sobre falas longas para variar os planos.
   - Encerrar com conclusão, resultado ou reflexão que já exista no material.
   - Nunca inventar contexto familiar, sentimentos ou motivos que não estejam nas falas.
+  - Vozes de GPS, rádio, TV, anúncios ou música não são falas da família; não escolha esses trechos.
 formatos:
   auto: Deixar o sistema sugerir o formato a partir do material.
   vlog-reflexao: Vlog com reflexão — experiência vivida seguida do que ela significou.

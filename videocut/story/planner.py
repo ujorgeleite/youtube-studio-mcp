@@ -20,6 +20,7 @@ from core.timefmt import clock, span
 
 from .adjust import shorten
 from .chronology import BaseCut, base_cut, chronological, moment_block, recorded_at
+from .coherence import SceneRules, tidy
 from .validate import build_report
 
 PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
@@ -218,6 +219,10 @@ def plan_stories(
     report_step("Montando e validando a sequência")
     raw = assemble(outline, chapters, chapter_results, hook, title)
     report = build_report(raw, inventory, None)
+    rules = SceneRules.load()
+    for proposal in report.proposals:
+        for video in proposal.videos:
+            proposal.warnings.extend(tidy(video, inventory, rules))
     fit_duration(report, inventory, target_s, cut)
     return report
 

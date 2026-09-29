@@ -11,7 +11,7 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 
 - [x] **1. Fundação** — pasta isolada, venv, Makefile, schemas, projeto persistido, cache
 - [x] **2. Mídia** — ffprobe, miniaturas, amostragem de frames, mudanças de cena, áudio e proxies
-- [ ] **3. Fala** — Whisper MLX com palavras, frases, glossário e cache
+- [x] **3. Fala** — Whisper MLX com palavras, frases, glossário e cache
 - [ ] **4. Visão** — MLX-VLM/Qwen3-VL, passagem ampla + detalhada, JSON, cache por modelo
 - [ ] **5. Histórias** — inventário, planejador editorial, propostas, suficiência, validador
 - [ ] **6. Montagem e render** — faixas de imagem/áudio, B-roll, crossfades, formato, ffmpeg, SRT, relatório
@@ -27,3 +27,4 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 |---|---|---|
 | 1 | concluída | Mac de referência: Apple M5, 24 GB. Mudança de cena via filtro `scene` do ffmpeg (sem OpenCV). |
 | 2 | concluída | `media/`: probe com rotação, catálogo que preserva ids, frames em cache, cenas via ffmpeg, WAV 16 kHz, proxy H.264. |
+| 3 | concluída | `analysis/speech.py`: Whisper MLX, frases por pontuação/pausa, cache por modelo+glossário, `release_model()`. Smoke test real ok (5,6 s). |

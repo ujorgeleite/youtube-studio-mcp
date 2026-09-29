@@ -1,0 +1,10 @@
+language: pt
+initial_prompt: >-
+  Do Sul pra Fora. Família gaúcha na Holanda. Eindhoven, Korein, chimarrão,
+  bah, Ramona, Pedro, Viamão, gaúcho.
+corrections:
+  eindoven: Eindhoven
+  corein: Korein
+  chimarao: chimarrão
+  vimao: Viamão
+  gaucho: gaúcho

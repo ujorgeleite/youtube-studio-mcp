@@ -7,7 +7,8 @@ from nicegui import ui
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ui import analysis_view, material, media  # noqa: E402,F401
+from ui import analysis_view, material, media, review, stories  # noqa: E402,F401
+from ui.preview import install_player  # noqa: E402
 from ui.shell import Shell  # noqa: E402
 from ui.state import ANALYSIS, DELIVERY, MATERIAL, REVIEW, STORIES, STUDIO  # noqa: E402
 
@@ -23,8 +24,8 @@ def placeholder(step: str) -> callable:
 RENDERERS = {
     MATERIAL: material.render,
     ANALYSIS: analysis_view.render,
-    STORIES: placeholder("Histórias"),
-    REVIEW: placeholder("Revisão"),
+    STORIES: stories.render,
+    REVIEW: review.render,
     DELIVERY: placeholder("Entrega"),
 }
 
@@ -32,6 +33,7 @@ RENDERERS = {
 @ui.page("/")
 def index() -> None:
     STUDIO.restore_last()
+    install_player()
     Shell(STUDIO, RENDERERS).build()
 
 

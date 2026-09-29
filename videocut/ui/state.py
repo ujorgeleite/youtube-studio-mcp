@@ -23,6 +23,7 @@ class Studio:
     analyzing: bool = False
     catalog_errors: dict[str, str] = field(default_factory=dict)
     inventory_cache: Inventory | None = None
+    video_id: str | None = None
     delivery: dict = field(default_factory=dict)
 
     @property

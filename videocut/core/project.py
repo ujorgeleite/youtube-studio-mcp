@@ -81,6 +81,7 @@ class TakeStatus:
 class ReviewState:
     order: list[str] = field(default_factory=list)
     excluded: list[str] = field(default_factory=list)
+    protected: list[str] = field(default_factory=list)
     active: str | None = None
 
 

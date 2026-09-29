@@ -142,3 +142,26 @@ def test_shorten_drops_low_priority_beats_first():
     assert "desenvolvimento" not in roles and {"gancho", "mensagem", "conclusao"} <= set(roles)
     assert shorter.duration_s <= video.duration_s - 15
     assert len(video.beats) == 5
+
+
+def test_shorten_never_removes_protected_beats():
+    inventory = example_inventory()
+    video = build_report(_single(FULL), inventory).proposals[0].videos[0]
+    development = next(beat for beat in video.beats if beat.role == "desenvolvimento")
+    shorter = shorten(video, video.duration_s - 15, inventory, protected={development.id})
+    assert development.id in [beat.id for beat in shorter.beats]
+
+
+def test_extend_trim_and_replace_keep_whole_sentences():
+    from story.adjust import extend_beat, replace_moment, trim_beat
+    inventory = example_inventory()
+    beat = build_report(_single([_block("T05.02", "mensagem")]), inventory).proposals[0].videos[0].beats[0]
+    assert beat.end_s < 45
+    assert extend_beat(beat, inventory) and beat.end_s > 49
+    assert "dia simples" in beat.evidence[0].quote
+    assert trim_beat(beat, inventory) and beat.end_s < 45
+    assert not trim_beat(beat, inventory)
+    moment = next(m for m in inventory.moments if m.id == "T04.01")
+    replace_moment(beat, moment, inventory)
+    assert (beat.take_id, beat.audio, beat.start_s, beat.end_s) == ("T04", "ambiente", 22, 72)
+    assert beat.evidence[0].observation == "crianças brincam no balanço"

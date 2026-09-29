@@ -17,7 +17,7 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 - [x] **6. Montagem e render** — faixas de imagem/áudio, B-roll, crossfades, formato, ffmpeg, SRT, relatório
 - [x] **7. Timeline Filmora** — XML editável e pacote de entrega
 - [x] **8. UI Material + Análise** — telas 1–2, análise em background por take
-- [ ] **9. UI Histórias + Revisão** — telas 3–4, evidências, blocos, troca de vídeo, versão mais curta
+- [x] **9. UI Histórias + Revisão** — telas 3–4, evidências, blocos, troca de vídeo, versão mais curta
 - [ ] **10. UI Entrega** — tela 5, render em background, relatório em formação
 - [ ] **11. Prova com episódio real** — comparador com edição existente, benchmark 4B × 8B, doctor, docs
 
@@ -34,3 +34,4 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 | 2b | concluída | Proxies `.LRF` da câmera (mesmo nome, duração ±1 s) viram `Take.proxy`; `analysis_path` usado em miniatura, cenas e frames. Render sempre usa o original. Na UI (fase 8), servir `.LRF` como `video/mp4` e usar áudio do LRF com fallback para o original. |
 | 7 | concluída | FCP7 XML (xmeml v5): V1 blocos, V2 B-roll, A1 fala/ambiente, A2 ambiente do B-roll com Audio Levels. Guia Mac do Filmora só cita “Importar Timeline XML”; formato escolhido porque o Filmora exporta FCP7 XML. **Validar importação real na fase 11.** `montage/delivery.py` grava documentos antes do render. |
 | 8 | concluída | `analysis/pipeline.py` (Whisper em todos → libera → VLM → planejador, cancelável, falha por take). UI: `ui/shell.py` (moldura, `notify` no root para callbacks pós-await), `material.py`, `analysis_view.py`, `/media/<chave>` (LRF como video/mp4). `make ui` → http://localhost:8090. Verificado no navegador com Whisper real + modelo visual roteirizado (script de demo fora do repo). |
+| 9 | concluída | `stories.py` (veredito, lacunas, propostas, critérios com evidência, itens descartados), `review.py` (faixas imagem/apoio/áudio, excluir/restaurar/mover/proteger, ±frase, trocar trecho, versão mais curta, restaurar original), `evidence.py` e `player.js` (prévia da sequência com B-roll sobreposto, sem render). Verificado no navegador. |

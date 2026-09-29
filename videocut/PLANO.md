@@ -44,3 +44,7 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 2. Rodar `make analyze` + `make compare` com um episódio já editado para medir a proposta contra a sua edição.
 3. Importar um `timelines/*__timeline.xml` no seu Filmora e confirmar se V1/V2/A1/A2 chegam corretos.
 4. Ajustar `config/canal.yaml` e `prompts/historias.md` a partir do que a comparação mostrar.
+
+## Próximos passos
+
+Ver `BACKLOG.md`: takes curtos, modo de cargas longas (pausa térmica), Mac acordado, seletor “Rodar de madrugada” e aceleração da visão. Implementar quando pedido (“implementa o backlog”).

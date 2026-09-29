@@ -185,3 +185,39 @@ def test_delivery_renders_each_video_and_isolates_failures(tmp_path: Path, monke
             assert "Entrega pronta" in texts and "1/2 vídeos · 00:17 de montagem planejada" in texts
 
     asyncio.run(exercise())
+
+
+def test_short_takes_arrive_unchecked_with_badge_and_button(media_dir: Path, tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(state, "LAST_PROJECT", tmp_path / "last.json")
+    monkeypatch.setattr(material, "min_take_s", lambda: 5.0)
+
+    async def inline(function, *args, **kwargs):
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(material.run, "io_bound", inline)
+
+    async def exercise():
+        monkeypatch.setattr(core, "loop", asyncio.get_running_loop())
+        with Client(page("/short-test")) as client:
+            studio = Studio()
+            shell = Shell(studio, _renderers())
+            shell.build()
+            await material.open_folder(shell, str(media_dir), str(tmp_path / "out"))
+            await asyncio.sleep(0.05)
+            assert studio.project.selected == ["T02"]
+            texts = _texts(client)
+            assert "curto · 4 s" in texts and "Desmarcar curtos (< 5 s)" in texts
+            assert any(text.endswith("1 curto(s) fora da análise") for text in texts)
+            studio.project.selected = ["T01", "T02"]
+            studio.project.save()
+            await material.open_folder(shell, str(media_dir), str(tmp_path / "out"))
+            assert studio.project.selected == ["T01", "T02"]
+
+    asyncio.run(exercise())
+
+
+def test_cli_analyze_reports_short_takes(media_dir: Path, tmp_path: Path, capsys):
+    import cli
+    project = cli._open_project(str(media_dir), str(tmp_path / "out"), 5)
+    assert project.selected == ["T02"]
+    assert "desmarcado por ser curto (4.0 s): T01 · a_passeio.mov" in capsys.readouterr().out

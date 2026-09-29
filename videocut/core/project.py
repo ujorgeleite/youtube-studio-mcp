@@ -126,6 +126,22 @@ class Project:
     def take(self, take_id: str) -> Take | None:
         return next((take for take in self.takes if take.id == take_id), None)
 
+    def merge_takes(self, takes: list[Take], min_take_s: float = 0.0) -> list[Take]:
+        """Atualiza o catálogo; takes novos entram selecionados se não forem curtos demais.
+
+        Devolve os takes novos que ficaram desmarcados por serem curtos.
+        """
+        known = {take.id for take in self.takes}
+        chosen = set(self.selected)
+        skipped = [take for take in takes if take.id not in known and take.duration_s < min_take_s]
+        skipped_ids = {take.id for take in skipped}
+        self.takes = takes
+        self.selected = [take.id for take in takes if take.id in chosen or (take.id not in known and take.id not in skipped_ids)]
+        return skipped
+
+    def short_takes(self, min_take_s: float) -> list[Take]:
+        return [take for take in self.takes if take.duration_s < min_take_s]
+
     def save(self) -> Path:
         self.updated_at = datetime.now().isoformat(timespec="seconds")
         return write_json(self.layout.project_file, self)

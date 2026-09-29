@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from analysis.pipeline import Analysis, AnalysisMonitor, load_inventory  # noqa: E402
 from analysis.speech import transcribe_take  # noqa: E402
-from core.config import model_cached, models, vision_options  # noqa: E402
+from core.config import min_take_s, model_cached, models, vision_options  # noqa: E402
 from core.offline import enable_offline  # noqa: E402
 from core.project import Project  # noqa: E402
 from core.safety import SourceProtectionError, write_text  # noqa: E402
@@ -64,18 +64,18 @@ def download_models(args: argparse.Namespace) -> int:
     return 0
 
 
-def _open_project(folder: str, output: str | None) -> Project:
+def _open_project(folder: str, output: str | None, min_take: float = 0.0) -> Project:
     project = Project.open(folder, output)
     takes, errors = catalog_folder(project.folder, project.layout.thumbnails, project.takes)
     for name, error in errors.items():
         print(f"ignorado {name}: {error}")
-    project.takes = takes
-    project.selected = project.selected or [take.id for take in takes]
+    for take in project.merge_takes(takes, min_take):
+        print(f"desmarcado por ser curto ({take.duration_s:.1f} s): {take.id} · {take.name}")
     return project
 
 
 def analyze(args: argparse.Namespace) -> int:
-    project = _open_project(args.folder, args.output)
+    project = _open_project(args.folder, args.output, args.min_take_s)
     project.intention = args.intention or project.intention
     project.model = args.model or project.model
     project.target_minutes = args.minutes or project.target_minutes
@@ -161,6 +161,8 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--intention", default="")
             command.add_argument("--model", choices=list(vision_options()))
             command.add_argument("--minutes", type=float)
+            command.add_argument("--min-take-s", type=float, default=min_take_s(),
+                                 help="takes novos mais curtos ficam fora da análise (padrão: config/modelos.yaml)")
         if name == "compare":
             command.add_argument("edit", help="MP4 da sua edição final")
             command.add_argument("--proposal")

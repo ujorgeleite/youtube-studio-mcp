@@ -6,7 +6,7 @@ from pathlib import Path
 
 from nicegui import run, ui
 
-from core.config import load_yaml, models, vision_options
+from core.config import load_yaml, min_take_s, models, vision_options
 from core.project import Project, default_output_dir
 from core.safety import SourceProtectionError
 from core.timefmt import clock
@@ -41,10 +41,10 @@ async def open_folder(shell: Shell, folder: str, output: str) -> None:
     except MediaError as error:
         shell.notify(str(error), "negative")
         return
-    known = {take.id for take in project.takes}
-    project.takes = takes
-    project.selected = [take.id for take in takes if take.id in set(project.selected) or take.id not in known]
+    skipped = project.merge_takes(takes, min_take_s())
     project.save()
+    if skipped:
+        shell.notify(f"{len(skipped)} take(s) com menos de {min_take_s():g} s ficaram desmarcados · marque-os se quiser analisar.")
     studio.use(project)
     studio.catalog_errors = errors
     if not takes:
@@ -108,7 +108,9 @@ def source_panel(shell: Shell) -> None:
 
 def _selected_summary(project: Project) -> str:
     total = sum(take.duration_s for take in project.selected_takes)
-    return f"{len(project.selected)} selecionados · {clock(total)} de material"
+    short = [take for take in project.short_takes(min_take_s()) if take.id not in project.selected]
+    extra = f" · {len(short)} curto(s) fora da análise" if short else ""
+    return f"{len(project.selected)} selecionados · {clock(total)} de material{extra}"
 
 
 def take_grid(shell: Shell) -> None:
@@ -126,11 +128,23 @@ def take_grid(shell: Shell) -> None:
         project.save()
         shell.main.refresh()
 
+    def drop_short() -> None:
+        short = {take.id for take in project.short_takes(limit)}
+        removed = [take_id for take_id in project.selected if take_id in short]
+        project.selected = [take_id for take_id in project.selected if take_id not in short]
+        project.save()
+        shell.notify(f"{len(removed)} take(s) curto(s) desmarcado(s)." if removed else "Nenhum take curto estava marcado.")
+        shell.main.refresh()
+
+    limit = min_take_s()
+
     with ui.row().classes("w-full justify-between items-center"):
         ui.label(f"{len(project.takes)} takes").classes("vc-h3")
         with ui.row().classes("gap-2"):
             theme.button("Todos", lambda: set_all(True), small=True)
             theme.button("Limpar", lambda: set_all(False), small=True)
+            if project.short_takes(limit):
+                theme.button(f"Desmarcar curtos (< {limit:g} s)", drop_short, small=True)
     with ui.element("div").classes("vc-grid"):
         for take in project.takes:
             checked = take.id in project.selected
@@ -148,6 +162,8 @@ def take_grid(shell: Shell) -> None:
                             theme.pill("LRF", "teal")
                         if not take.has_audio:
                             theme.pill("sem áudio", "amber")
+                        if take.duration_s < limit:
+                            theme.pill(f"curto · {take.duration_s:.0f} s", "amber")
     ui.label(_selected_summary(project)).classes("vc-tiny vc-muted")
 
 

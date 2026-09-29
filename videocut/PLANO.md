@@ -48,3 +48,5 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 ## Próximos passos
 
 Ver `BACKLOG.md`: takes curtos, modo de cargas longas (pausa térmica), Mac acordado, seletor “Rodar de madrugada” e aceleração da visão. Implementar quando pedido (“implementa o backlog”).
+
+| B1 | concluída | Takes novos < `material.min_take_s` (5 s) chegam desmarcados (`Project.merge_takes`); selo “curto”, botão “Desmarcar curtos”, resumo; `cli.py analyze --min-take-s`. |

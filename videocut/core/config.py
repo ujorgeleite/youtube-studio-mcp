@@ -41,5 +41,9 @@ def sampling() -> dict:
     return models().get("sampling", {})
 
 
+def min_take_s() -> float:
+    return float(models().get("material", {}).get("min_take_s", 5))
+
+
 def glossary() -> dict:
     return load_yaml("glossario.yaml")

@@ -4,7 +4,7 @@ Itens planejados e ainda **não implementados**. Quando a pessoa pedir
 “implementa o backlog”, siga na ordem 1 → 2 → 3 → 4, marque `[x]` ao concluir
 cada item (com `make test` verde e um commit por item) e registre em `PLANO.md`.
 
-- [ ] **1. Desmarcar takes curtos demais**
+- [x] **1. Desmarcar takes curtos demais**
 - [ ] **2. Modo de cargas longas (proteção térmica)** — requer `brew install macmon` (pedir permissão)
 - [ ] **3. Manter o Mac acordado durante o trabalho**
 - [ ] **4. Seletor “Rodar de madrugada” (sem senha)**

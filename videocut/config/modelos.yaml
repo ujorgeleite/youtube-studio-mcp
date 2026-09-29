@@ -19,3 +19,8 @@ sampling:
   frames_per_call: 4
   detail_windows_per_take: 4
   detail_frames_per_window: 6
+
+# Takes mais curtos que isso chegam desmarcados (só na primeira vez que aparecem;
+# escolhas já salvas no projeto são respeitadas).
+material:
+  min_take_s: 5

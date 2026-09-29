@@ -80,3 +80,14 @@ def test_time_formatting():
     assert span(40, 120) == "00:40–02:00"
     assert parse_clock("01:12.5") == 72.5
     assert parse_clock(3) == 3.0
+
+
+def test_merge_takes_deselects_only_new_short_takes(tmp_path: Path):
+    project = Project.open(tmp_path / "raw")
+    project.takes = [Take("T01", "/a", "a", 2), Take("T02", "/b", "b", 60)]
+    project.selected = ["T01"]
+    skipped = project.merge_takes([Take("T01", "/a", "a", 2), Take("T02", "/b", "b", 60),
+                                   Take("T03", "/c", "c", 3), Take("T04", "/d", "d", 30)], min_take_s=5)
+    assert [take.id for take in skipped] == ["T03"]
+    assert project.selected == ["T01", "T04"]
+    assert [take.id for take in project.short_takes(5)] == ["T01", "T03"]

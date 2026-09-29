@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 from .probe import MediaError, run_ffmpeg
@@ -54,8 +55,9 @@ def merge_times(base: list[float], extra: list[float], min_gap_s: float = 1.5) -
 
 def scene_changes(source: str | Path, threshold: float = SCENE_THRESHOLD, limit: int = 40) -> list[float]:
     """Mudanças visuais bruscas; indicam troca de plano, não troca de assunto."""
+    hardware = ["-hwaccel", "videotoolbox"] if sys.platform == "darwin" else []
     proc = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-i", str(source), "-an", "-vf",
+        ["ffmpeg", "-hide_banner", *hardware, "-i", str(source), "-an", "-vf",
          f"scale=320:-2,select='gt(scene,{threshold})',showinfo", "-f", "null", "-"],
         capture_output=True, text=True,
     )

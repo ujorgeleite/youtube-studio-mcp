@@ -142,3 +142,46 @@ def test_review_actions_persist_and_restore(tmp_path: Path, monkeypatch):
             assert len(restored[1].beats) == 5 and restored[2].order[0] == first
 
     asyncio.run(exercise())
+
+
+def test_delivery_renders_each_video_and_isolates_failures(tmp_path: Path, monkeypatch):
+    from ui import delivery_view, stories
+    from tests.test_story import _block
+    from story.validate import build_report
+    from tests.story_fixtures import example_inventory
+
+    studio = _story_studio(tmp_path, monkeypatch)
+    raw = {"propostas": [{"titulo": "Dois", "videos": [
+        {"titulo": "Parque", "blocos": [_block("T01.02", "gancho"), _block("T03.02", "conclusao")]},
+        {"titulo": "Conversa", "blocos": [_block("T05.02", "gancho"), _block("T05.05", "conclusao")]}]}]}
+    studio.project.report = build_report(raw, example_inventory())
+
+    async def inline(function, *args, **kwargs):
+        return function(*args, **kwargs)
+
+    def fake_deliver(proposal, video, inventory, review, root, work, progress=None):
+        if video.title == "Conversa":
+            raise RuntimeError("ffmpeg falhou no bloco 2")
+        progress(0.5, "meio")
+        return {key: str(tmp_path / f"{key}.out") for key in ("video", "plan", "report", "subtitles", "timeline")}
+
+    monkeypatch.setattr(delivery_view.run, "io_bound", inline)
+    monkeypatch.setattr(delivery_view, "deliver", fake_deliver)
+
+    async def exercise():
+        monkeypatch.setattr(core, "loop", asyncio.get_running_loop())
+        with Client(page("/delivery-test")) as client:
+            shell = Shell(studio, {**_renderers(), 4: delivery_view.render})
+            shell.build()
+            stories.choose(shell, studio.project.report.proposals[0])
+            shell.go(4)
+            await delivery_view.process(shell)
+            await asyncio.sleep(0.05)
+            renders = studio.project.renders
+            assert renders["a1"].status == "pronto" and renders["a1"].artifacts["video"].endswith("video.out")
+            assert renders["a2"].status == "falhou" and "bloco 2" in renders["a2"].error
+            assert not studio.busy
+            texts = _texts(client)
+            assert "Entrega pronta" in texts and "1/2 vídeos · 00:17 de montagem planejada" in texts
+
+    asyncio.run(exercise())

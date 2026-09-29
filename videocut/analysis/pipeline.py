@@ -13,7 +13,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Callable
 
-from core.config import vision_repo
+from core.config import models, vision_repo
 from core.project import (
     STAGE_FAILED, STAGE_MEDIA, STAGE_PENDING, STAGE_READY, STAGE_SPEECH, STAGE_VISION, Project, TakeStatus,
 )
@@ -24,12 +24,13 @@ from media.probe import MediaError, probe
 from story.planner import plan_stories
 
 from .inventory import build_inventory
+from .models import ensure_model
 from .speech import release_model, transcribe_take
 from .vision import analyze_take_vision
 from .vlm import LocalModel, MlxModel
 
 STAGES = (
-    "Ler mídia e preparar áudio",
+    "Preparar modelos, mídia e áudio",
     "Transcrever e localizar falas",
     "Descrever cenas e ações",
     "Conectar temas e avaliar histórias",
@@ -51,6 +52,7 @@ class AnalysisMonitor:
     finished_at: float = 0.0
     log: list[str] = field(default_factory=list)
     error: str | None = None
+    download: float | None = None
     cancel: threading.Event = field(default_factory=threading.Event)
 
     @property
@@ -114,6 +116,19 @@ class Analysis:
     def active(self, takes: list[Take]) -> list[Take]:
         return [take for take in takes if take.id not in self.failed]
 
+    def ensure_models(self, takes: list[Take], vision: str) -> None:
+        """Baixa antes de processar: falta de rede aparece no início, não no meio do lote."""
+        self.enter(0)
+
+        def progress(fraction: float, message: str) -> None:
+            self.monitor.message = message
+            self.monitor.download = fraction
+
+        if any(take.has_audio for take in takes):
+            ensure_model(models().get("whisper", "mlx-community/whisper-large-v3-turbo"), "modelo de fala (Whisper)", progress)
+        ensure_model(vision, "modelo visual (Qwen3-VL)", progress)
+        self.monitor.download = None
+
     def prepare_audio(self, takes: list[Take]) -> dict[str, Path]:
         self.enter(0)
         audio: dict[str, Path] = {}
@@ -151,7 +166,9 @@ class Analysis:
         return transcripts
 
     def describe(self, takes: list[Take], transcripts: dict[str, Transcript], model: LocalModel) -> dict[str, list[VisualObservation]]:
+        loading = self.monitor.message
         self.enter(2)
+        self.monitor.message = loading
         observations: dict[str, list[VisualObservation]] = {}
         for take in self.active(takes):
             self.check_cancel()
@@ -186,10 +203,14 @@ class Analysis:
             self.set_status(take, STAGE_PENDING)
         model: LocalModel | None = None
         try:
+            repo = vision_repo(project.model or None)
+            self.ensure_models(takes, repo)
+            self.check_cancel()
             audio = self.prepare_audio(takes)
             transcripts = self.transcribe(takes, audio)
             project.save()
-            model = self.model_factory(vision_repo(project.model or None))
+            self.monitor.message = "Carregando o modelo visual na memória…"
+            model = self.model_factory(repo)
             observations = self.describe(takes, transcripts, model)
             project.save()
             self.check_cancel()

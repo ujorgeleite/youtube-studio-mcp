@@ -3,9 +3,13 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from nicegui import ui
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from core.offline import enable_offline  # noqa: E402
+
+enable_offline()
+
+from nicegui import ui  # noqa: E402
 
 from ui import analysis_view, delivery_view, material, media, review, stories  # noqa: E402,F401
 from ui.preview import install_player  # noqa: E402

@@ -60,7 +60,7 @@ flowchart TD
 |---|---|---|
 | `core/` | Modelo de domínio (`schema.py`), estado persistido (`project.py`), proteção da origem (`safety.py`), cache por etapa, serialização de dataclasses, leitura de YAML | Importar qualquer outro pacote |
 | `media/` | ffprobe (com rotação), miniaturas, frames, cenas, WAV de 16 kHz, proxy H.264, pareamento de `.LRF` | Chamar modelos |
-| `analysis/` | Whisper (`speech.py`), modelo visual (`vlm.py`, `vision.py`), inventário de momentos, orquestração (`pipeline.py`) | Decidir histórias |
+| `analysis/` | Whisper (`speech.py`), modelo visual (`vlm.py`, `vision.py`), download protegido (`models.py`), inventário de momentos, orquestração (`pipeline.py`) | Decidir histórias |
 | `story/` | Prompt editorial, validação determinística, critérios de suficiência, ajustes sem modelo | Ler mídia ou renderizar |
 | `montage/` | Plano executável, render ffmpeg, SRT, FCP7 XML, relatório, pacote de entrega | Chamar modelos |
 | `ui/` | Telas, estado da sessão, rota de mídia, player JS | Conter regra de negócio |
@@ -438,6 +438,8 @@ suíte cobre cada item (`make test`, sem baixar modelos).
 11. Render e timeline usam `Take.path`; análise e prévia usam `Take.analysis_path`. (`test_vision_reads_frames_from_camera_proxy`, `test_speech_prefers_camera_proxy_with_audio`)
 12. Blocos protegidos nunca saem na versão mais curta. (`test_shorten_never_removes_protected_beats`)
 13. Qualquer edição na revisão invalida `project.renders`. (`ui/review.py::save`)
+14. A interface e a CLI rodam offline: `enable_offline()` antes de qualquer import de `huggingface_hub`; só o downloader liga a rede. (verificado com proxy inexistente; ver `PLANO.md`)
+15. Download de modelo nunca trava a análise: sem bytes por 90 s, o subprocesso é encerrado e retomado; após 5 tentativas, erro claro. (`tests/test_models.py`)
 
 ## 11. Pontos em aberto
 

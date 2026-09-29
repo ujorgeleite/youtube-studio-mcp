@@ -7,7 +7,7 @@ EDIT   ?= ./edicao-final.mp4
 MODELS ?= qwen3-vl-4b,qwen3-vl-8b
 
 .DEFAULT_GOAL := help
-.PHONY: help install doctor test test-verbose ui analyze compare benchmark check-ffmpeg clean
+.PHONY: help install doctor models test test-verbose ui analyze compare benchmark check-ffmpeg clean
 
 help: ## List available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -21,6 +21,9 @@ install: $(PYTHON) ## Create the venv and install dependencies
 
 doctor: ## Check ffmpeg, dependencies, memory and cached models
 	$(PYTHON) cli.py doctor
+
+models: ## Download Whisper and the default vision model with progress (MODELS=... optional)
+	$(PYTHON) cli.py models $(if $(filter command line,$(origin MODELS)),--models "$(MODELS)")
 
 test: ## Run the tests (no model downloads, no real inference)
 	$(PYTHON) -m pytest -q

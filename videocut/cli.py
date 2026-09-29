@@ -15,20 +15,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from analysis.pipeline import Analysis, AnalysisMonitor, load_inventory  # noqa: E402
 from analysis.speech import transcribe_take  # noqa: E402
-from core.config import models, vision_options  # noqa: E402
+from core.config import model_cached, models, vision_options  # noqa: E402
+from core.offline import enable_offline  # noqa: E402
 from core.project import Project  # noqa: E402
 from core.safety import SourceProtectionError, write_text  # noqa: E402
 from core.serial import write_json  # noqa: E402
 from media.audio import extract_speech_audio  # noqa: E402
 from media.catalog import catalog_folder  # noqa: E402
 from media.probe import probe  # noqa: E402
-
-HF_CACHE = Path.home() / ".cache" / "huggingface" / "hub"
-
-
-def model_cached(repo: str) -> bool:
-    return (HF_CACHE / f"models--{repo.replace('/', '--')}").is_dir()
-
 
 def doctor(_: argparse.Namespace) -> int:
     ok = True
@@ -52,6 +46,22 @@ def doctor(_: argparse.Namespace) -> int:
         print(f"{'✓' if model_cached(repo) else '·'} modelo {key}: {repo}" + ("" if model_cached(repo) else " (baixa na primeira análise)"))
     print("Pronto." if ok else "Corrija os itens com ✗.")
     return 0 if ok else 1
+
+
+def download_models(args: argparse.Namespace) -> int:
+    from analysis.models import ModelDownloadError, ensure_model
+
+    options = vision_options()
+    keys = args.models.split(",") if args.models else [models().get("vision", {}).get("default")]
+    targets = [("Whisper", models().get("whisper"))] + [(key, options[key]["repo"]) for key in keys]
+    for label, repo in targets:
+        try:
+            ensure_model(repo, label, lambda fraction, message: print(f"  {message}", end="\r", flush=True))
+        except ModelDownloadError as error:
+            print(f"\n✗ {error}")
+            return 1
+        print(f"\n✓ {label}: {repo}")
+    return 0
 
 
 def _open_project(folder: str, output: str | None) -> Project:
@@ -137,6 +147,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="videocut")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("doctor", help="verifica ffmpeg, dependências, memória e modelos").set_defaults(handler=doctor)
+    fetch = commands.add_parser("models", help="baixa os modelos antes do primeiro uso, com progresso")
+    fetch.add_argument("--models", help="ex.: qwen3-vl-4b,qwen3-vl-8b (padrão: o modelo configurado)")
+    fetch.set_defaults(handler=download_models)
     for name, handler, help_text in (("analyze", analyze, "analisa uma pasta sem abrir a interface"),
                                      ("compare", compare_edit, "compara a proposta com uma edição já feita"),
                                      ("benchmark", benchmark_models, "mede os modelos visuais no seu material")):
@@ -156,6 +169,8 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--takes", help="ex.: T01,T03")
             command.add_argument("--models", help="ex.: qwen3-vl-4b,qwen3-vl-8b")
     args = parser.parse_args(argv)
+    if args.command != "models":
+        enable_offline()
     try:
         return args.handler(args)
     except SourceProtectionError as error:

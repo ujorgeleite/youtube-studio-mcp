@@ -19,13 +19,21 @@ Requisitos: macOS com Apple Silicon, Python 3.12+, `ffmpeg`/`ffprobe` no PATH.
 ```bash
 cd videocut
 make install
-make doctor
+make models      # baixa uma vez: Whisper (~1,6 GB) + Qwen3-VL 8B (~5,8 GB)
+make doctor      # confirma que tudo está local
 make ui          # http://localhost:8090
 ```
 
-Na primeira análise os modelos são baixados do Hugging Face e depois ficam em
-cache: Whisper large-v3-turbo (~1,6 GB) e Qwen3-VL 8B 4-bit (~5,8 GB) ou 4B
-(~3,1 GB). Escolha o modelo na tela Material ou em `config/modelos.yaml`.
+### Funciona sem internet
+
+Depois do `make models`, o VideoCut roda 100% offline: a interface e a CLI
+iniciam com `HF_HUB_OFFLINE=1` e carregam os modelos só do disco
+(`~/.cache/huggingface/hub`). A única etapa que acessa a rede é o próprio
+`make models` (ou a primeira análise, se algum modelo ainda faltar). Para
+baixar também o 4B: `make models MODELS=qwen3-vl-8b,qwen3-vl-4b`.
+
+O download é protegido contra travamentos: se ficar 90 s sem receber dados, é
+reiniciado de onde parou (até 5 tentativas) e o progresso aparece na tela.
 
 ## Fluxo
 

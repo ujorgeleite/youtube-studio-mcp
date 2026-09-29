@@ -36,7 +36,10 @@ Nenhum vídeo original é alterado.
 3. **Imagem e áudio são faixas separadas.** A fala de um take pode continuar
    enquanto aparecem imagens de outro.
 4. **Tudo em cache.** Pedir uma versão mais curta recalcula só a proposta.
-5. **Um modelo pesado por vez.** Whisper e o modelo visual não ficam carregados
+5. **Offline por padrão.** `core/offline.py` liga `HF_HUB_OFFLINE` antes de
+   qualquer import de modelo; só `analysis/models.py` baixa, num subprocesso
+   com rede, sem xet, com vigia de travamento e retomada.
+6. **Um modelo pesado por vez.** Whisper e o modelo visual não ficam carregados
    juntos.
 
 ## Estrutura

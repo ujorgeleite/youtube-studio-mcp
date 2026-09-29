@@ -80,6 +80,8 @@ def live_content(shell: Shell) -> None:
                     ui.label(stopwatch(monitor.elapsed_s)).classes("vc-h2 vc-muted").style("font-variant-numeric:tabular-nums")
                 theme.progress_bar(overall)
                 ui.label(monitor.message or "Aguardando").classes("vc-tiny vc-muted")
+                if monitor.download is not None:
+                    theme.progress_bar(monitor.download)
                 for index, name in enumerate(STAGES):
                     done = monitor.stage > index or (monitor.stage == index and not studio.analyzing and not monitor.error)
                     current = monitor.stage == index and studio.analyzing

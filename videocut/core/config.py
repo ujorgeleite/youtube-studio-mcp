@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 
 CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
+HF_CACHE = Path.home() / ".cache" / "huggingface" / "hub"
 
 
 @lru_cache(maxsize=None)
@@ -30,6 +31,10 @@ def vision_repo(name: str | None = None) -> str:
     if key in options:
         return options[key]["repo"]
     return key
+
+
+def model_cached(repo: str) -> bool:
+    return (HF_CACHE / f"models--{repo.replace('/', '--')}").is_dir()
 
 
 def sampling() -> dict:

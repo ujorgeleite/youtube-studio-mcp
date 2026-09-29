@@ -170,4 +170,4 @@ def intention_panel(shell: Shell) -> None:
         if not project.selected:
             start.disable()
         theme.note("Na primeira análise os modelos são baixados do Hugging Face (Whisper ~1,6 GB; "
-                   "Qwen3-VL 4B ~3,1 GB ou 8B ~5,8 GB). Depois tudo roda offline e fica em cache.")
+                   "Qwen3-VL 4B ~3,1 GB ou 8B ~5,8 GB), com progresso na tela. Para baixar antes: make models.")

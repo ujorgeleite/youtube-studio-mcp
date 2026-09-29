@@ -27,6 +27,12 @@ def make_clip(path: Path, *, seconds: float = 6, audio: bool = True, size: str =
     return path
 
 
+@pytest.fixture(autouse=True)
+def no_model_downloads(monkeypatch):
+    """A suíte nunca baixa modelos; `tests/test_models.py` exercita o download com comandos falsos."""
+    monkeypatch.setattr("analysis.pipeline.ensure_model", lambda *args, **kwargs: None)
+
+
 @pytest.fixture(scope="session")
 def media_dir(tmp_path_factory) -> Path:
     folder = tmp_path_factory.mktemp("raw")

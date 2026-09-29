@@ -1,4 +1,37 @@
+import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+
+def make_clip(path: Path, *, seconds: float = 6, audio: bool = True, size: str = "320x240", cut_at: float | None = 3) -> Path:
+    """Clipe sintético: cor sólida e padrão de teste, com troca brusca em `cut_at`."""
+    first = cut_at if cut_at is not None else seconds
+    video = f"color=c=red:s={size}:d={first}:r=25"
+    inputs = ["-f", "lavfi", "-i", video]
+    graph = "[0:v]format=yuv420p[v]"
+    if cut_at is not None:
+        inputs += ["-f", "lavfi", "-i", f"testsrc2=s={size}:d={seconds - cut_at}:r=25"]
+        graph = "[0:v][1:v]concat=n=2:v=1:a=0,format=yuv420p[v]"
+    if audio:
+        inputs += ["-f", "lavfi", "-i", f"sine=frequency=440:duration={seconds}:sample_rate=48000"]
+    audio_index = 2 if cut_at is not None else 1
+    args = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", *inputs, "-filter_complex", graph, "-map", "[v]"]
+    if audio:
+        args += ["-map", f"{audio_index}:a", "-c:a", "aac"]
+    args += ["-c:v", "libx264", "-preset", "ultrafast", "-t", str(seconds), str(path)]
+    subprocess.run(args, check=True)
+    return path
+
+
+@pytest.fixture(scope="session")
+def media_dir(tmp_path_factory) -> Path:
+    folder = tmp_path_factory.mktemp("raw")
+    make_clip(folder / "b_conversa.mp4")
+    make_clip(folder / "a_passeio.mov", audio=False, cut_at=None, seconds=4)
+    (folder / "c_quebrado.mp4").write_bytes(b"not a video")
+    (folder / "notas.txt").write_text("ignorar")
+    return folder

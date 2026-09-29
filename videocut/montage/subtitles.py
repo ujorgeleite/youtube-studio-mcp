@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.safety import write_text
 from core.schema import SPEECH, EditPlan, Transcript
 
 MAX_CUE_CHARS = 42
@@ -61,9 +62,6 @@ def _srt_time(seconds: float) -> str:
 
 
 def write_srt(plan: EditPlan, transcripts: dict[str, Transcript], destination: str | Path) -> Path:
-    target = Path(destination)
-    target.parent.mkdir(parents=True, exist_ok=True)
     blocks = [f"{number}\n{_srt_time(cue.start_s)} --> {_srt_time(cue.end_s)}\n{cue.text}\n"
               for number, cue in enumerate(build_cues(timeline_words(plan, transcripts)), start=1)]
-    target.write_text("\n".join(blocks), encoding="utf-8")
-    return target
+    return write_text(destination, "\n".join(blocks))

@@ -7,6 +7,8 @@ import typing
 from pathlib import Path
 from typing import Any, TypeVar
 
+from .safety import ensure_writable
+
 T = TypeVar("T")
 
 
@@ -48,9 +50,9 @@ def from_data(cls: type[T], data: dict) -> T:
 
 
 def write_json(path: str | Path, value: Any) -> Path:
-    target = Path(path)
+    target = ensure_writable(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_suffix(target.suffix + ".tmp")
+    temporary = ensure_writable(target.with_suffix(target.suffix + ".tmp"))
     temporary.write_text(json.dumps(to_data(value), ensure_ascii=False, indent=2), encoding="utf-8")
     temporary.replace(target)
     return target

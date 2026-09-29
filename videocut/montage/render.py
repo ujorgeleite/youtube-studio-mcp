@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable
 
 from core.cache import fingerprint
+from core.safety import ensure_writable, write_text
 from core.schema import AudioClip, EditPlan, OutputFormat, VideoClip
 from media.probe import MediaError, run_ffmpeg
 
@@ -76,7 +77,7 @@ def _audio_chain(clip: AudioClip, fmt: OutputFormat, offset_s: float) -> str:
     return ",".join(parts)
 
 
-def segment_command(segment: Segment, plan: EditPlan, destination: Path, encoder: list[str]) -> list[str]:
+def segment_command(segment: Segment, plan: EditPlan, encoder: list[str]) -> list[str]:
     fmt = plan.format
     inputs: list[str] = []
     graph: list[str] = []
@@ -111,7 +112,7 @@ def segment_command(segment: Segment, plan: EditPlan, destination: Path, encoder
         *inputs, "-filter_complex", ";".join(graph), "-map", f"[{current}]", "-map", "[aout]",
         "-t", f"{segment.duration_s:.3f}", *encoder, "-r", frame_rate(fmt.fps),
         "-c:a", "aac", "-b:a", "192k", "-ar", str(fmt.sample_rate), "-ac", "2",
-        "-movflags", "+faststart", str(destination),
+        "-movflags", "+faststart",
     ]
 
 
@@ -128,9 +129,9 @@ def render_plan(plan: EditPlan, destination: str | Path, work_dir: str | Path, p
     if not plan.main_track:
         raise MediaError("o plano não tem blocos para renderizar")
     report = progress or (lambda fraction, message: None)
-    target = Path(destination)
+    target = ensure_writable(destination)
     target.parent.mkdir(parents=True, exist_ok=True)
-    cache = Path(work_dir) / "segments"
+    cache = ensure_writable(Path(work_dir) / "segments")
     cache.mkdir(parents=True, exist_ok=True)
     encoder = video_encoder()
     parts = segments(plan)
@@ -142,16 +143,16 @@ def render_plan(plan: EditPlan, destination: str | Path, work_dir: str | Path, p
         file = cache / f"{segment_key(part, plan, encoder)}.mp4"
         if not file.is_file():
             partial = file.with_name(f".{file.name}")
-            run_ffmpeg(segment_command(part, plan, partial, encoder), error=f"falha ao montar o bloco {number}")
-            partial.replace(file)
+            run_ffmpeg(segment_command(part, plan, encoder), output=partial, error=f"falha ao montar o bloco {number}")
+            partial.replace(ensure_writable(file))
         files.append(file)
         done += part.duration_s
     report(0.96, "Unindo blocos")
     listing = cache / f"{target.stem}.concat.txt"
-    listing.write_text("".join(f"file '{file.as_posix()}'\n" for file in files), encoding="utf-8")
+    write_text(listing, "".join(f"file '{file.as_posix()}'\n" for file in files))
     temporary = target.with_name(f".{target.name}")
-    run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy", "-movflags", "+faststart", str(temporary)],
-               error="falha ao unir os blocos")
+    run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy", "-movflags", "+faststart"],
+               output=temporary, error="falha ao unir os blocos")
     temporary.replace(target)
     report(1.0, "Montagem concluída")
     return target

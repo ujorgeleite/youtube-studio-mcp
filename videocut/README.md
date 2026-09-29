@@ -4,6 +4,10 @@ Montagem por conteúdo, 100% local. O VideoCut descobre as histórias que existe
 nos seus takes, mostra as evidências de cada uma e gera uma primeira montagem
 para continuar a edição no Filmora.
 
+**Seus originais estão seguros:** o VideoCut nunca apaga, move ou sobrescreve
+nada na pasta de origem e recusa uma pasta de saída dentro dela. Tudo o que ele
+gera vai para a pasta irmã `raw__videocut/`.
+
 O resultado é uma montagem editorial forte e revisável, não um corte final. O
 modelo pode errar intenção, humor e contexto familiar; por isso toda afirmação
 aponta para arquivo e timestamp, e nada é montado sem a sua revisão.

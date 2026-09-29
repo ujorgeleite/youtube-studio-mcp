@@ -58,7 +58,7 @@ flowchart TD
 
 | Pacote | Responsabilidade | Não pode |
 |---|---|---|
-| `core/` | Modelo de domínio (`schema.py`), estado persistido (`project.py`), cache por etapa, serialização de dataclasses, leitura de YAML | Importar qualquer outro pacote |
+| `core/` | Modelo de domínio (`schema.py`), estado persistido (`project.py`), proteção da origem (`safety.py`), cache por etapa, serialização de dataclasses, leitura de YAML | Importar qualquer outro pacote |
 | `media/` | ffprobe (com rotação), miniaturas, frames, cenas, WAV de 16 kHz, proxy H.264, pareamento de `.LRF` | Chamar modelos |
 | `analysis/` | Whisper (`speech.py`), modelo visual (`vlm.py`, `vision.py`), inventário de momentos, orquestração (`pipeline.py`) | Decidir histórias |
 | `story/` | Prompt editorial, validação determinística, critérios de suficiência, ajustes sem modelo | Ler mídia ou renderizar |
@@ -382,7 +382,7 @@ fallback. A timeline XML aponta sempre para os originais, nunca para os `.LRF`.
 ## 8. Arquivos em disco
 
 ```text
-raw/                                  # nunca escrito
+raw/                                  # protegida: nunca apagada, movida ou escrita (core/safety.py)
 ├── DJI_0001.MP4                      # render usa este
 └── DJI_0001.LRF                      # prévia/análise usam este (Take.proxy)
 
@@ -425,7 +425,7 @@ a etapa afetada.
 Use esta lista em revisões de código ou por agentes. Entre parênteses, onde a
 suíte cobre cada item (`make test`, sem baixar modelos).
 
-1. Nenhum arquivo em `raw/` é escrito ou movido. (implícito: toda escrita vai para `Layout`)
+1. Nenhum arquivo da pasta de origem é apagado, movido, renomeado ou sobrescrito, e nada novo é gravado nela. Toda escrita passa por `core/safety.py::ensure_writable`. (`tests/test_safety.py`, incluindo `test_full_analysis_and_delivery_leave_the_source_folder_identical`, que compara o SHA-256 de cada arquivo antes e depois)
 2. `videocut/` não importa do MCP nem do Roughcut. (`grep -rlE "roughcut|youtube_studio_mcp" videocut --include="*.py" --exclude-dir=.venv` deve voltar vazio)
 3. Toda `Evidence` exibida vem de `Transcript`/`Moment`, nunca do texto do modelo. (`tests/test_story.py::test_invented_moments_and_quotes_never_reach_the_person`)
 4. Ids inexistentes citados pelo planejador vão para `report.rejected`. (idem)

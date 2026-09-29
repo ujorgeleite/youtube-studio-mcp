@@ -21,6 +21,13 @@ Nenhum vídeo original é alterado.
 
 ## Princípios
 
+0. **A pasta de origem é intocável.** O VideoCut nunca apaga, move, renomeia
+   ou sobrescreve nada nela, nem grava arquivos novos lá dentro. Toda escrita
+   passa por `core/safety.py::ensure_writable`: `Project.open` protege a pasta
+   e recusa uma saída dentro dela, e `run_ffmpeg`, `write_json`, `write_text` e
+   cada `Path.replace` conferem o destino antes de gravar. Links simbólicos são
+   resolvidos. Não existe código de remoção no projeto; qualquer limpeza futura
+   deve se limitar a `raw__videocut/.work` e `.cache` e também passar pela proteção.
 1. **Fatos antes de interpretação.** Transcrição e observação visual são fatos
    com timestamp. Propostas só citam fatos via `Evidence`; o validador rejeita
    citações que não existem no inventário.

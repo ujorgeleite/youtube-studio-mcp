@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.project import ReviewState
+from core.safety import write_text
 from core.schema import CRITERION_MISSING, CRITERION_OK, EditPlan, Inventory, Proposal, StoryVideo
 from core.timefmt import clock, span
 
@@ -65,7 +66,4 @@ def editorial_report(proposal: Proposal, video: StoryVideo, plan: EditPlan, inve
 
 
 def write_report(text: str, destination: str | Path) -> Path:
-    target = Path(destination)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(text, encoding="utf-8")
-    return target
+    return write_text(destination, text)

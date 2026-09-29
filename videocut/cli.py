@@ -17,6 +17,7 @@ from analysis.pipeline import Analysis, AnalysisMonitor, load_inventory  # noqa:
 from analysis.speech import transcribe_take  # noqa: E402
 from core.config import models, vision_options  # noqa: E402
 from core.project import Project  # noqa: E402
+from core.safety import SourceProtectionError, write_text  # noqa: E402
 from core.serial import write_json  # noqa: E402
 from media.audio import extract_speech_audio  # noqa: E402
 from media.catalog import catalog_folder  # noqa: E402
@@ -125,9 +126,7 @@ def benchmark_models(args: argparse.Namespace) -> int:
     transcripts = inventory.transcripts if inventory else {}
     keys = args.models.split(",") if args.models else None
     runs = benchmark(takes, transcripts, project.layout.work / "benchmark", keys)
-    target = project.layout.analysis / "benchmark.md"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(benchmark_report(runs, takes), encoding="utf-8")
+    target = write_text(project.layout.analysis / "benchmark.md", benchmark_report(runs, takes))
     write_json(project.layout.analysis / "benchmark.json", [{"model": run.key, "seconds": run.material_s, "peak_gb": run.peak_gb,
                                                                "calls": run.calls, "invalid": run.invalid, "error": run.error} for run in runs])
     print(f"Relatório: {target}")
@@ -157,7 +156,11 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--takes", help="ex.: T01,T03")
             command.add_argument("--models", help="ex.: qwen3-vl-4b,qwen3-vl-8b")
     args = parser.parse_args(argv)
-    return args.handler(args)
+    try:
+        return args.handler(args)
+    except SourceProtectionError as error:
+        print(f"bloqueado: {error}")
+        return 2
 
 
 if __name__ == "__main__":

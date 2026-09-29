@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
+from core.safety import ensure_writable
 from core.schema import AudioClip, EditPlan, Take, VideoClip
 
 
@@ -136,7 +137,7 @@ class XmemlWriter:
 
 
 def write_xmeml(plan: EditPlan, takes: list[Take], destination: str | Path) -> Path:
-    target = Path(destination)
+    target = ensure_writable(destination)
     target.parent.mkdir(parents=True, exist_ok=True)
     tree = XmemlWriter(plan, {take.id: take for take in takes}).build()
     ET.indent(tree)

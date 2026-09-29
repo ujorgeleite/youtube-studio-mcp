@@ -62,7 +62,7 @@ def test_subtitles_are_remapped_to_the_montage_timeline(tmp_path: Path):
 
 def test_segment_command_overlays_broll_and_mixes_audio():
     plan = build_edit_plan("A", _video(), _takes(), output=OutputFormat(320, 180, 25))
-    command = render.segment_command(render.segments(plan)[0], plan, Path("out.mp4"), ["-c:v", "libx264"])
+    command = render.segment_command(render.segments(plan)[0], plan, ["-c:v", "libx264"])
     graph = command[command.index("-filter_complex") + 1]
     assert command.count("-i") == 3
     assert "overlay=eof_action=pass:enable='between(t,1.000,2.500)'" in graph

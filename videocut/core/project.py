@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from .safety import SourceProtectionError, is_protected, protect
 from .schema import StoryReport, Take
 from .serial import from_data, read_json, write_json
 
@@ -131,7 +132,11 @@ class Project:
 
     @classmethod
     def open(cls, folder: str | Path, output_dir: str | Path | None = None) -> "Project":
+        """Protege a pasta de origem e recusa uma saída dentro dela."""
+        protect(folder)
         root = Path(output_dir).expanduser().resolve() if output_dir else default_output_dir(folder)
+        if is_protected(root):
+            raise SourceProtectionError(f"a pasta de saída {root} não pode ficar dentro da pasta de origem")
         data = read_json(Layout(root).project_file)
         if data is not None:
             project = from_data(cls, data)

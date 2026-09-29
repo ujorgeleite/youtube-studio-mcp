@@ -12,6 +12,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 
 from core.project import ReviewState
+from core.safety import write_text
 from core.schema import Inventory, Sentence, StoryVideo, Transcript
 from core.timefmt import clock, span
 from montage.plan import ordered_beats
@@ -140,7 +141,4 @@ def comparison_report(result: Comparison, inventory: Inventory, edit_name: str, 
 
 
 def write_comparison(text: str, destination: str | Path) -> Path:
-    target = Path(destination)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(text, encoding="utf-8")
-    return target
+    return write_text(destination, text)

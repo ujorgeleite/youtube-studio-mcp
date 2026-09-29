@@ -8,6 +8,7 @@ from nicegui import run, ui
 
 from core.config import load_yaml, models, vision_options
 from core.project import Project, default_output_dir
+from core.safety import SourceProtectionError
 from core.timefmt import clock
 from media.catalog import catalog_folder
 from media.probe import MediaError
@@ -25,7 +26,11 @@ async def open_folder(shell: Shell, folder: str, output: str) -> None:
     if not folder.strip():
         shell.notify("Informe a pasta com os takes.", "warning")
         return
-    project = Project.open(folder.strip(), output.strip() or None)
+    try:
+        project = Project.open(folder.strip(), output.strip() or None)
+    except SourceProtectionError as error:
+        shell.notify(str(error), "negative")
+        return
     try:
         takes, errors = await run.io_bound(catalog_folder, project.folder, project.layout.thumbnails, project.takes)
     except MediaError as error:

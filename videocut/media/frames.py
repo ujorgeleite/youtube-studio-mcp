@@ -19,8 +19,8 @@ def extract_frame(source: str | Path, at_s: float, destination: str | Path, widt
     target = Path(destination)
     target.parent.mkdir(parents=True, exist_ok=True)
     run_ffmpeg(
-        ["-ss", f"{max(0.0, at_s):.3f}", "-i", str(source), "-frames:v", "1", "-vf", f"scale={width}:-2", "-q:v", "4", str(target)],
-        error=f"falha ao extrair frame de {Path(source).name}",
+        ["-ss", f"{max(0.0, at_s):.3f}", "-i", str(source), "-frames:v", "1", "-vf", f"scale={width}:-2", "-q:v", "4"],
+        output=target, error=f"falha ao extrair frame de {Path(source).name}",
     )
     if not target.is_file():
         raise MediaError(f"frame não gerado em {at_s:.2f}s de {Path(source).name}")

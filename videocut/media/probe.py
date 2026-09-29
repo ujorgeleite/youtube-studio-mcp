@@ -6,6 +6,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.safety import ensure_writable
+
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".mkv", ".avi", ".mts", ".webm"}
 CAMERA_PROXY_EXTENSIONS = {".lrf"}
 PROXY_DURATION_TOLERANCE_S = 1.0
@@ -31,8 +33,10 @@ def require_ffmpeg() -> None:
             raise MediaError(f"{binary} não encontrado no PATH")
 
 
-def run_ffmpeg(args: list[str], *, error: str) -> subprocess.CompletedProcess:
-    proc = subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", *args], capture_output=True, text=True)
+def run_ffmpeg(args: list[str], *, output: str | Path, error: str) -> subprocess.CompletedProcess:
+    """`-y` sobrescreve a saída; por isso ela é conferida contra a pasta de origem antes."""
+    ensure_writable(output)
+    proc = subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", *args, str(output)], capture_output=True, text=True)
     if proc.returncode != 0:
         detail = proc.stderr.strip().splitlines()
         raise MediaError(f"{error}: {detail[-1] if detail else 'erro do ffmpeg'}")

@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".mkv", ".avi", ".mts", ".webm"}
+CAMERA_PROXY_EXTENSIONS = {".lrf"}
+PROXY_DURATION_TOLERANCE_S = 1.0
 
 
 class MediaError(RuntimeError):
@@ -87,3 +89,17 @@ def probe(path: str | Path) -> MediaInfo:
         has_audio=any(stream.get("codec_type") == "audio" for stream in streams),
         video_codec=video.get("codec_name", ""),
     )
+
+
+def camera_proxy(path: str | Path, duration_s: float) -> Path | None:
+    """Proxy gravado pela câmera (ex.: .LRF da DJI) com o mesmo nome e a mesma duração."""
+    source = Path(path)
+    for candidate in source.parent.iterdir():
+        if candidate.stem != source.stem or candidate.suffix.lower() not in CAMERA_PROXY_EXTENSIONS:
+            continue
+        try:
+            info = probe(candidate)
+        except MediaError:
+            return None
+        return candidate if abs(info.duration_s - duration_s) <= PROXY_DURATION_TOLERANCE_S else None
+    return None

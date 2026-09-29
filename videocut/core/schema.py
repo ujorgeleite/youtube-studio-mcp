@@ -41,6 +41,12 @@ class Take:
     fps: float = 0.0
     has_audio: bool = True
     thumbnail: str | None = None
+    proxy: str | None = None
+
+    @property
+    def analysis_path(self) -> str:
+        """Proxy da câmera (.LRF) para ver e analisar; o render sempre usa `path`."""
+        return self.proxy or self.path
 
 
 @dataclass(frozen=True)

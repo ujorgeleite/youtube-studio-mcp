@@ -70,3 +70,19 @@ def test_catalog_keeps_ids_and_reports_failures(media_dir: Path, tmp_path: Path)
     known = [Take("T07", takes[1].path, "b_conversa.mp4", 6)]
     again, _ = catalog_folder(media_dir, tmp_path / "thumbs", known)
     assert [take.id for take in again] == ["T08", "T07"]
+
+
+def test_camera_lrf_proxy_is_paired_by_name_and_duration(tmp_path: Path):
+    from tests.conftest import make_clip
+    raw = tmp_path / "dji"
+    raw.mkdir()
+    make_clip(raw / "DJI_0001.MP4", size="640x360")
+    make_clip(raw / "p1.mp4", size="160x90").rename(raw / "DJI_0001.LRF")
+    make_clip(raw / "DJI_0002.MP4", size="640x360")
+    make_clip(raw / "p2.mp4", size="160x90", seconds=2, cut_at=None).rename(raw / "DJI_0002.LRF")
+    takes, failed = catalog_folder(raw, tmp_path / "thumbs")
+    assert not failed and [take.name for take in takes] == ["DJI_0001.MP4", "DJI_0002.MP4"]
+    first, second = takes
+    assert first.proxy.endswith("DJI_0001.LRF") and first.analysis_path == first.proxy
+    assert (first.width, first.height) == (640, 360)
+    assert second.proxy is None and second.analysis_path == second.path

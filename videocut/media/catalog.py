@@ -6,7 +6,7 @@ from pathlib import Path
 from core.schema import Take
 
 from .frames import extract_thumbnail
-from .probe import MediaError, list_videos, probe
+from .probe import MediaError, camera_proxy, list_videos, probe
 
 
 def _thumb_name(path: Path) -> str:
@@ -17,9 +17,10 @@ def _thumb_name(path: Path) -> str:
 def catalog_take(index: int, path: Path, thumbnails: Path, previous: Take | None = None) -> Take:
     """Mantém o id já atribuído ao arquivo para não quebrar evidências antigas."""
     info = probe(path)
+    proxy = camera_proxy(path, info.duration_s)
     thumb = thumbnails / _thumb_name(path)
     if not thumb.is_file():
-        extract_thumbnail(path, thumb, info.duration_s)
+        extract_thumbnail(proxy or path, thumb, info.duration_s)
     return Take(
         id=previous.id if previous else f"T{index:02d}",
         path=str(path.resolve()),
@@ -30,6 +31,7 @@ def catalog_take(index: int, path: Path, thumbnails: Path, previous: Take | None
         fps=info.fps,
         has_audio=info.has_audio,
         thumbnail=str(thumb),
+        proxy=str(proxy.resolve()) if proxy else None,
     )
 
 

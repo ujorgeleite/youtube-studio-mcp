@@ -96,3 +96,23 @@ def test_analyze_take_fails_when_model_never_answers(media_dir: Path, tmp_path: 
     silent.default = "não sei"
     with pytest.raises(ModelError):
         vision.analyze_take_vision(take, None, silent, tmp_path / ".cache", tmp_path / "frames")
+
+
+def test_vision_reads_frames_from_camera_proxy(media_dir: Path, tmp_path: Path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(vision, "scene_changes", lambda source: seen.append(source) or [])
+    take = Take("T02", "/original/ausente.mp4", "ausente.mp4", 6.0, proxy=str(media_dir / "b_conversa.mp4"))
+    monkeypatch.setattr(vision, "StageCache", lambda root, source: _MemoryCache())
+    vision.analyze_take_vision(take, None, FakeModel([]), tmp_path / ".cache", tmp_path / "frames")
+    assert seen == [take.proxy]
+
+
+class _MemoryCache:
+    def __init__(self):
+        self.data = {}
+
+    def load(self, stage, variant=""):
+        return self.data.get((stage, variant))
+
+    def save(self, stage, value, variant=""):
+        self.data[(stage, variant)] = value

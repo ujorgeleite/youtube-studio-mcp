@@ -137,10 +137,10 @@ def analyze_take_vision(
 
     scenes = cache.load("scenes")
     if scenes is None:
-        scenes = scene_changes(take.path)
+        scenes = scene_changes(take.analysis_path)
         cache.save("scenes", scenes)
     times = sample_plan(take.duration_s, scenes, settings)
-    frames = dict(extract_frames(take.path, times, Path(frames_dir) / take.id, "ampla"))
+    frames = dict(extract_frames(take.analysis_path, times, Path(frames_dir) / take.id, "ampla"))
     windows = windows_for(times, take.duration_s, settings.get("frames_per_call", 4))
     detail_limit = settings.get("detail_windows_per_take", 4)
     total_steps = len(windows) + detail_limit
@@ -169,7 +169,7 @@ def analyze_take_vision(
         report((len(windows) + position) / total_steps, f"Detalhando {take.id} · momento {position}/{len(chosen)}")
         broad = observations[index]
         sequence = spread_times(broad.start_s, broad.end_s, per_window)
-        images = [path for _, path in extract_frames(take.path, sequence, Path(frames_dir) / take.id, "detalhe")]
+        images = [path for _, path in extract_frames(take.analysis_path, sequence, Path(frames_dir) / take.id, "detalhe")]
         prompt = detail_prompt.format(
             instantes=", ".join(f"{moment:.1f}s" for moment in sequence), arquivo=take.name,
             fala=_speech(transcript, broad.start_s, broad.end_s), anterior=broad.description, total=len(sequence),

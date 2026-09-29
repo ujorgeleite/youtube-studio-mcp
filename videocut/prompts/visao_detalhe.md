@@ -17,6 +17,6 @@ Responda somente com um objeto JSON:
   "problemas": ["tremido, escuro, desfocado, obstruido, estourado, tela_preta — só se houver"],
   "inicio_frame": 1,
   "fim_frame": {total},
-  "interesse": 0.0,
+  "interesse": <número de 0 a 1 estimado para ESTE trecho>,
   "apoio": false
 }}

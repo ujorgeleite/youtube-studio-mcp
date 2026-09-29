@@ -222,6 +222,7 @@ class StoryReport:
     intention_check: str = ""
     proposals: list[Proposal] = field(default_factory=list)
     rejected: list[str] = field(default_factory=list)
+    gaps: list[Gap] = field(default_factory=list)
 
     def proposal(self, proposal_id: str) -> Proposal | None:
         return next((proposal for proposal in self.proposals if proposal.id == proposal_id), None)

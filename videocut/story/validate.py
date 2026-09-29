@@ -184,6 +184,11 @@ class ReportBuilder:
             result[key] = Criterion(key, _status(value.get("status")), str(value.get("detalhe") or "").strip(), evidence)
         return result
 
+    @staticmethod
+    def gaps(raw: dict) -> list[Gap]:
+        return [Gap(str(gap.get("descricao") or "").strip(), str(gap.get("sugestao") or "").strip())
+                for gap in _list(raw.get("lacunas")) if isinstance(gap, dict) and gap.get("descricao")]
+
     def proposal(self, raw: dict, proposal_id: str) -> Proposal | None:
         warnings = [str(item) for item in _list(raw.get("avisos")) if str(item).strip()]
         videos = []
@@ -196,9 +201,7 @@ class ReportBuilder:
             return None
         proposal = Proposal(
             id=proposal_id, title=title, summary=str(raw.get("resumo") or "").strip(),
-            recommended=bool(raw.get("recomendada")), videos=videos, warnings=warnings,
-            gaps=[Gap(str(gap.get("descricao") or "").strip(), str(gap.get("sugestao") or "").strip())
-                  for gap in _list(raw.get("lacunas")) if isinstance(gap, dict) and gap.get("descricao")],
+            recommended=bool(raw.get("recomendada")), videos=videos, warnings=warnings, gaps=self.gaps(raw),
         )
         proposal.criteria = assess(proposal, self.suggested_criteria(raw.get("criterios")))
         proposal.partial = bool(raw.get("parcial")) or is_partial(proposal.criteria)
@@ -218,11 +221,14 @@ def _verdict(raw: object, proposals: list[Proposal]) -> str:
 def build_report(raw: dict, inventory: Inventory, target_s: float | None = None) -> StoryReport:
     builder = ReportBuilder(inventory, target_s)
     proposals: list[Proposal] = []
+    gaps: list[Gap] = []
     for item in _list(raw.get("propostas")) if isinstance(raw, dict) else []:
         if isinstance(item, dict):
             proposal = builder.proposal(item, chr(ord("A") + len(proposals)))
             if proposal:
                 proposals.append(proposal)
+            else:
+                gaps.extend(gap for gap in builder.gaps(item) if gap not in gaps)
     recommended = [proposal for proposal in proposals if proposal.recommended and not proposal.partial]
     for proposal in proposals:
         proposal.recommended = False
@@ -236,4 +242,5 @@ def build_report(raw: dict, inventory: Inventory, target_s: float | None = None)
         intention_check=str(data.get("intencao") or "").strip(),
         proposals=proposals,
         rejected=builder.rejected,
+        gaps=gaps,
     )

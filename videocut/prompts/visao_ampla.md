@@ -13,9 +13,10 @@ Responda somente com um objeto JSON:
   "plano": "close | medio | aberto | detalhe | misto",
   "pessoas": ["descrição curta de cada pessoa visível, sem nomes"],
   "problemas": ["somente se houver: tremido, escuro, desfocado, obstruido, estourado, tela_preta"],
-  "interesse": 0.0,
+  "interesse": <número de 0 a 1 estimado para ESTE trecho>,
   "apoio": false
 }}
 "interesse" vai de 0 a 1: quanto o trecho mostra algo que prende a atenção
-(ação, expressão, lugar marcante). "apoio" é true quando as imagens servem
+(ação, expressão, lugar marcante). Use a escala inteira: 0.2 para parede ou
+chão, 0.5 para cena comum, 0.8 ou mais para paisagem marcante ou ação forte. "apoio" é true quando as imagens servem
 para cobrir uma fala de outro take sem depender do próprio áudio.

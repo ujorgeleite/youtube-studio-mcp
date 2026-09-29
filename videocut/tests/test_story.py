@@ -165,3 +165,12 @@ def test_extend_trim_and_replace_keep_whole_sentences():
     replace_moment(beat, moment, inventory)
     assert (beat.take_id, beat.audio, beat.start_s, beat.end_s) == ("T04", "ambiente", 22, 72)
     assert beat.evidence[0].observation == "crianças brincam no balanço"
+
+
+def test_gaps_survive_when_the_model_says_nothing_can_be_assembled():
+    raw = {"veredito": "falta_material", "resumo": "Só há telas de teste.", "propostas": [
+        {"titulo": "Insuficiente", "parcial": True, "videos": [],
+         "lacunas": [{"descricao": "Falta mensagem falada.", "sugestao": "Gravar uma fala de 30 s."}]}]}
+    report = build_report(raw, example_inventory())
+    assert report.verdict == "falta_material" and not report.proposals
+    assert [(gap.description, gap.suggestion) for gap in report.gaps] == [("Falta mensagem falada.", "Gravar uma fala de 30 s.")]

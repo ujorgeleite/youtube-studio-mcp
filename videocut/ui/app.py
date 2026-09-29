@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -35,4 +36,4 @@ def index() -> None:
 
 
 if __name__ in {"__main__", "__mp_main__"}:
-    ui.run(title="VideoCut", port=PORT, reload=False, show=True, dark=True)
+    ui.run(title="VideoCut", port=PORT, reload=False, show=os.environ.get("VIDEOCUT_OPEN_BROWSER", "1") != "0", dark=True)

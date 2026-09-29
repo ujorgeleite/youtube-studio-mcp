@@ -48,7 +48,7 @@ def render(shell: Shell) -> None:
         theme.pill(VERDICT_TEXT.get(report.verdict, report.verdict), "amber" if report.verdict == VERDICT_INSUFFICIENT else "teal")
         for topic in report.topics[:5]:
             theme.pill(topic)
-    if report.summary:
+    if report.summary and report.verdict != VERDICT_INSUFFICIENT:
         ui.label(report.summary).classes("vc-muted mb-2")
     if project.intention and report.intention_check:
         with theme.panel().classes("mb-4"):
@@ -56,7 +56,7 @@ def render(shell: Shell) -> None:
             ui.label(f"“{project.intention}”").classes("vc-small mt-1")
             ui.label(report.intention_check).classes("vc-muted vc-small")
     if report.verdict == VERDICT_INSUFFICIENT:
-        insufficient_banner(report.proposals)
+        insufficient_banner(report)
     with theme.layout():
         with theme.stack():
             if not report.proposals:
@@ -79,16 +79,21 @@ def render(shell: Shell) -> None:
             theme.note("Cada afirmação aponta para arquivo e timestamp. Abra uma evidência para assistir ao trecho original.")
 
 
-def insufficient_banner(proposals: list[Proposal]) -> None:
-    gaps = [gap for proposal in proposals for gap in proposal.gaps]
+def insufficient_banner(report) -> None:
+    gaps = [*report.gaps, *(gap for proposal in report.proposals for gap in proposal.gaps)]
     with theme.panel("amber").classes("mb-4"):
         theme.pill("Lacuna editorial", "amber")
         ui.label("Ainda não há uma história completa").classes("vc-h2 mt-2")
-        for gap in gaps[:3]:
-            ui.label(gap.description)
+        if report.summary:
+            ui.label(report.summary).classes("vc-muted")
+        for gap in gaps[:4]:
+            ui.label(gap.description).classes("mt-2")
             if gap.suggestion:
                 ui.label(f"Sugestão de gravação: {gap.suggestion}").classes("vc-small vc-muted")
-        ui.label("Você ainda pode revisar um rascunho parcial, claramente identificado.").classes("vc-small vc-muted mt-1")
+        if report.proposals:
+            ui.label("Você ainda pode revisar um rascunho parcial, claramente identificado.").classes("vc-small vc-muted mt-1")
+        else:
+            ui.label("Grave o que falta, adicione os novos takes à pasta e analise de novo: o que já foi analisado vem do cache.").classes("vc-small vc-muted mt-1")
 
 
 def _message_beat(proposal: Proposal):

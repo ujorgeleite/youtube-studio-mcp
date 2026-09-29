@@ -36,7 +36,11 @@ apoio (imagem que pode cobrir fala de outro take), problema (tecnicamente ruim).
 - "inicio"/"fim" são opcionais e ficam DENTRO do intervalo do momento citado (formato mm:ss).
 - "citacao" deve copiar palavras exatas da fala do momento.
 - Momentos do tipo "problema" só entram se não houver alternativa, com aviso.
-- Blocos de fala podem ter "apoio": imagens de outros momentos por cima da fala.
+- Blocos de fala com mais de 6 segundos DEVEM ter "apoio" quando existirem momentos
+  do tipo apoio ou acao coerentes com o que está sendo dito: são as imagens que
+  aparecem por cima da fala e variam os planos. Use cada momento de apoio uma vez.
+- Momentos de acao ou apoio fortes também podem virar blocos próprios (audio
+  "ambiente") entre falas, para a história respirar.
 - Papéis permitidos: gancho, contexto, desenvolvimento, mensagem, conclusao, apoio.
 - Status dos critérios: ok, revisar, falta.
 

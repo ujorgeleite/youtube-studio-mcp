@@ -14,6 +14,8 @@ from core.serial import from_data
 SENTENCE_END = re.compile(r"[.!?…]+[\"”')]*$")
 MAX_SENTENCE_S = 18.0
 PAUSE_SPLIT_S = 0.9
+MIN_SEGMENT_CONFIDENCE = 0.45
+FILTER_VERSION = 2
 
 
 class SpeechError(RuntimeError):
@@ -27,9 +29,17 @@ def apply_corrections(text: str, corrections: dict[str, str]) -> str:
     return stripped.replace(stripped.strip(".,!?…;:\"'”“()"), replacement, 1) if replacement else stripped
 
 
+def is_hallucination(segment: dict) -> bool:
+    """Em ruído ou música o Whisper inventa frases com probabilidade por palavra perto de zero."""
+    probabilities = [row.get("probability") for row in segment.get("words") or [] if row.get("probability") is not None]
+    return bool(probabilities) and sum(probabilities) / len(probabilities) < MIN_SEGMENT_CONFIDENCE
+
+
 def words_from_result(result: dict, corrections: dict[str, str]) -> list[Word]:
     words = []
     for segment in result.get("segments", []):
+        if is_hallucination(segment):
+            continue
         for row in segment.get("words") or []:
             start, end = row.get("start"), row.get("end")
             text = apply_corrections(str(row.get("word", "")), corrections)
@@ -96,7 +106,7 @@ def transcribe_take(
 ) -> Transcript:
     repo = model or models().get("whisper", "mlx-community/whisper-large-v3-turbo")
     settings = glossary()
-    variant = fingerprint(repo, settings.get("initial_prompt"), sorted(settings.get("corrections", {}).items()))
+    variant = fingerprint(repo, settings.get("initial_prompt"), sorted(settings.get("corrections", {}).items()), FILTER_VERSION)
     cache = StageCache(cache_root, source)
     cached = None if refresh else cache.load("transcript", variant)
     if cached is not None:

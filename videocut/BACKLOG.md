@@ -6,8 +6,10 @@ marque `[x]` ao concluir (com `make test` verde e commit) e registre em `PLANO.m
 - [x] **1. Desmarcar takes curtos demais** — `5b69f2e`
 - [x] **2. Modo de cargas longas (proteção térmica)** — `18fe739` (`macmon` instalado)
 - [x] **3. Manter o Mac acordado durante o trabalho** — `18fe739`
-- [x] **4. Seletor “Rodar de madrugada” (sem senha)**
+- [x] **4. Seletor “Rodar de madrugada” (sem senha)** — `16cdd85`
 - [ ] **5. Acelerar a visão sem perder qualidade** — só depois do A/B no Episódio06
+- [ ] **6. Área de Configurações com os prompts editáveis**
+- [ ] **7. Skills e agentes configuráveis na área de Configurações** — depende do item 6
 
 ## Contexto
 
@@ -134,6 +136,96 @@ ajustes permanentes do macOS**.
   (`ambiente`, `plano`, `pessoas`, `apoio`), `max_tokens` 400, 1 chamada para
   takes < 5 s; perfil `rapido` (4B, detalhe limitado, frames 448 px) só após A/B
   no Episódio06 com `make compare` contra `reformandoOCarrocao.mp4`.
+
+## Item 6 · Área de Configurações com os prompts editáveis
+
+**Objetivo:** ver e editar, dentro do app, tudo o que é enviado aos modelos,
+sem abrir arquivos no editor, com segurança para voltar ao padrão.
+
+**Hoje** os textos ficam em arquivos lidos pelo código:
+
+| Arquivo | Usado em | Controla |
+|---|---|---|
+| `prompts/visao_ampla.md` | `analysis/vision.py::load_prompt` | descrição dos frames (passagem ampla) |
+| `prompts/visao_detalhe.md` | idem | sequência de frames (passagem detalhada) |
+| `prompts/capitulos.md` | `story/planner.py` | divisão do dia em capítulos |
+| `prompts/capitulo.md` | idem | escolha dos blocos de cada capítulo |
+| `config/canal.yaml` | `story/planner.py::channel_context`, tela Material | regras do canal e formatos |
+| `config/glossario.yaml` | `analysis/speech.py` | nomes e lugares para o Whisper |
+
+**Proposta:**
+- Nova etapa/aba **Configurações** (fora do fluxo 1–5, acessível pelo cabeçalho).
+- Um editor por texto (`ui.codemirror` ou `ui.textarea` em fonte mono), com:
+  descrição de para que serve, onde entra no fluxo e quais **variáveis** são
+  obrigatórias (ex.: `{momentos}`, `{takes}`, `{intencao}`), validadas antes de
+  salvar — um prompt sem `{momentos}` não pode ser salvo.
+- **Prévia**: mostrar o prompt final montado com dados reais do projeto aberto
+  (ex.: capítulo 1 do Episódio07), sem chamar o modelo.
+- **Padrão preservado**: os arquivos do repositório continuam como padrão; as
+  edições ficam em `~/.videocut/prompts/` (ou `videocut/.state/prompts/`, fora do
+  git) e têm prioridade. Botões “Restaurar padrão” e “Comparar com o padrão”.
+- **Histórico**: cada salvamento guarda uma versão com data; dá para voltar.
+- **Aviso de cache**: mudar um prompt de visão invalida as descrições (refaz a
+  análise visual); mudar os do planejador só refaz as histórias. A tela diz
+  isso antes de salvar e sugere “Refazer histórias”.
+- Remover o `lru_cache` de `core/config.py::load_yaml` (ou invalidá-lo ao salvar),
+  para as edições valerem sem reiniciar o app.
+
+**Pontos a decidir antes de implementar:**
+- Edições globais (todas as pastas) ou por projeto? Sugestão: globais, com
+  opção de sobrescrever por projeto depois.
+- Incluir também `config/modelos.yaml` (amostragem, memória por modelo) e
+  `config/execucao.yaml` (limites térmicos) como formulários, não texto livre?
+
+**Verificação:** editar `capitulo.md`, ver a prévia, salvar, “Refazer histórias”
+e conferir no cache (`analise/capituloNN__<hash>.json`) que o novo texto foi
+usado; “Restaurar padrão” volta ao arquivo do repositório; testes para
+validação de variáveis e prioridade usuário > padrão.
+
+## Item 7 · Skills e agentes configuráveis
+
+**Objetivo:** estender o que a IA faz sem mexer no código, criando e ativando
+comportamentos na mesma área de Configurações.
+
+**Definições propostas (a confirmar):**
+- **Skill** = instrução reutilizável que muda *como* uma etapa existente pensa.
+  Um arquivo Markdown com nome, descrição, etapa-alvo (`visao`, `capitulos`,
+  `capitulo`) e o texto que é acrescentado ao prompt dessa etapa. Ex.: “Vlog
+  rápido” (cortes curtos, sem falas longas), “Tutorial” (preservar passos em
+  ordem), “Humor da família” (priorizar risadas e reações). Ativada por projeto,
+  combinável com outras.
+- **Agente** = etapa nova com prompt, modelo e entrada/saída próprios, rodando
+  depois da análise ou do planejamento. Ex.: “Títulos e thumbnail” (sugere 5
+  títulos e o melhor frame), “Revisor de ritmo” (aponta blocos lentos),
+  “Capítulos do YouTube” (gera marcações de tempo para a descrição),
+  “Checagem de fatos da família” (lista nomes e lugares citados para revisão).
+  Resultado aparece como painel/arquivo extra na entrega; nunca altera a
+  montagem sem aprovação.
+
+**Proposta de implementação:**
+- `skills/` e `agents/` como pastas de arquivos Markdown com frontmatter
+  (`nome`, `descricao`, `etapa`/`entrada`, `saida`, `modelo`), padrão no repo +
+  pasta do usuário, igual ao item 6.
+- Registro que carrega e valida esses arquivos; skills inseridas nos prompts por
+  um marcador (ex.: `{skills}`) nas etapas; agentes executados por um runner
+  único que monta a entrada (inventário, proposta, plano) em JSON, chama o
+  modelo local, valida a saída contra um schema simples e salva em
+  `analise/agentes/<nome>.json`.
+- UI: lista com ativar/desativar por projeto, editor (reaproveita o do item 6),
+  “Testar agora” com o projeto aberto e tempo estimado.
+- Tudo continua local e offline; um agente não pode escrever fora da pasta de
+  saída (`core/safety.py`) nem alterar a montagem sem clique da pessoa.
+
+**Pontos a decidir antes de implementar:**
+- Quais 2–3 agentes vêm prontos na primeira versão?
+- Agentes podem encadear (saída de um vira entrada de outro) ou só isolados no início?
+- Formato compatível com skills do Claude Code (`SKILL.md` com frontmatter) para
+  reaproveitar skills que você já tem, como `legendar-video` e `remover-silencio`?
+
+**Verificação:** criar a skill “Vlog rápido”, ativar no Episódio07, “Refazer
+histórias” e comparar duração média dos blocos; criar o agente “Títulos”, rodar
+com a análise salva e ver o resultado na Entrega; testes para registro,
+validação de frontmatter, injeção de skills e isolamento de escrita dos agentes.
 
 ## Verificação (itens 1–4)
 

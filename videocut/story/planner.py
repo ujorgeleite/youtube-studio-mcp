@@ -118,7 +118,7 @@ def chapter_moments(cut: BaseCut, takes: list[str]) -> list[Moment]:
     return sorted(pool.values(), key=lambda moment: (cut.order[moment.take_id], moment.start_s))
 
 
-def chapter_blocks(raw: Any, moments: list[Moment], cut: BaseCut) -> list[dict]:
+def chapter_blocks(raw: Any, moments: list[Moment], cut: BaseCut, chapter: str = "") -> list[dict]:
     """Aceita o que o modelo escolheu; fala útil que ele só esqueceu volta para a sequência."""
     by_id = {moment.id: moment for moment in moments}
     speech_ids = {moment.id for moment in cut.speech}
@@ -142,6 +142,8 @@ def chapter_blocks(raw: Any, moments: list[Moment], cut: BaseCut) -> list[dict]:
             used.add(moment.id)
     blocks.sort(key=lambda block: (cut.order[by_id[block["momento"]].take_id], by_id[block["momento"]].start_s))
     fill_broll(blocks, moments, by_id, used)
+    for block in blocks:
+        block["capitulo"] = chapter
     return blocks
 
 
@@ -198,7 +200,7 @@ def plan_chapter(model: LocalModel, cache_dir: Path, video: str, chapter: dict, 
         raw = ask(model, prompt, cache_dir, f"capitulo{number:02d}", CHAPTER_MAX_TOKENS, refresh)
     except ModelError:
         raw = {}
-    return chapter_blocks(raw, moments, cut)
+    return chapter_blocks(raw, moments, cut, chapter["titulo"])
 
 
 def plan_stories(
@@ -255,7 +257,7 @@ def assemble(outline: dict, chapters: list[dict], results: list[list[dict]], hoo
     blocks = [block for chapter in results for block in chapter]
     if hook is not None and hook.kind == SPEECH:
         blocks = [block for block in blocks if block["momento"] != hook.id]
-        blocks.insert(0, moment_block(hook, "gancho", "Abertura", "Momento forte escolhido para abrir o vídeo"))
+        blocks.insert(0, {**moment_block(hook, "gancho", "Abertura", "Momento forte escolhido para abrir o vídeo"), "capitulo": "Abertura"})
     if blocks and blocks[-1]["papel"] not in ("conclusao", "mensagem"):
         blocks[-1]["papel"] = "conclusao"
     gaps = [gap for gap in outline.get("lacunas") or [] if isinstance(gap, dict)]

@@ -46,6 +46,10 @@ Nenhum vídeo original é alterado.
    `core/power.py` só lê ajustes de energia — o app nunca altera o macOS.
    `core/memory.py` mostra memória livre, swap e apps que ocupam memória, com
    passo a passo para liberar; o app nunca fecha programas por conta própria.
+8. **Tudo o que a IA recebe é visível e editável.** Prompts, regras, skills e
+   agentes ficam na tela ⚙ Configurações; cada chamada fica registrada em
+   `analise/registro/`. Guardrails determinísticos (validador, base cronológica,
+   coerência de cena) valem mesmo com prompts editados.
 
 ## Estrutura
 

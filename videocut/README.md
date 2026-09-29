@@ -105,15 +105,31 @@ trabalho, confere tomada, baixo consumo e atualizações automáticas e abre o
 painel certo dos Ajustes para o que estiver pendente, sem pedir senha. Detalhes
 em `docs/rodar-a-noite.md`.
 
-## Ajustes editoriais
+## Configurações (⚙ no cabeçalho)
 
-- `config/canal.yaml` — regras do canal e formatos; pesam mais que o modelo.
-- `prompts/capitulos.md` e `prompts/capitulo.md` — o planejador editorial:
-  primeiro divide o dia em capítulos, depois escolhe os blocos de cada um.
-- `prompts/visao_ampla.md`, `prompts/visao_detalhe.md` — descrição visual.
-- `config/glossario.yaml` — nomes e lugares para o Whisper.
+Tudo o que a IA recebe pode ser ajustado dentro do app, sem abrir arquivos:
 
-Mudar um prompt invalida só o cache da etapa afetada.
+- **Prompts e regras** — os 4 prompts (`prompts/`) e as regras em YAML
+  (`config/canal.yaml`, `estilo.yaml`, `glossario.yaml`, `modelos.yaml`,
+  `execucao.yaml`). O editor valida as variáveis obrigatórias, mostra a
+  **prévia com dados reais** do projeto aberto e o tamanho em tokens, compara
+  com o padrão, guarda histórico e restaura o padrão. Edições ficam em
+  `.state/ajustes/`; o repositório continua sendo o padrão.
+- **Skills** — instruções reutilizáveis que mudam como o planejador escolhe os
+  trechos (Vlog rápido, Tutorial, Humor da família ou as suas), ativadas por projeto.
+- **Agentes** — etapas extras sobre a montagem escolhida (títulos, descrição e
+  capítulos do YouTube; revisor de ritmo; checagem de nomes). Resultado em
+  `analise/agentes/`; nunca alteram a montagem.
+- **Registro de chamadas** — cada pedido e resposta do modelo, por execução,
+  em `analise/registro/`. É o que se lê para ajustar prompts, regras e skills.
+
+Skills e agentes são Markdown com frontmatter compatível com o `SKILL.md` do
+Claude Code (`name`, `description`). Mudar um prompt de visão refaz a análise
+visual; os do planejador e as regras valem ao clicar em “Refazer histórias”.
+
+O estilo de cena (`config/estilo.yaml`) é aplicado sem modelo depois do
+planejador: junta blocos seguidos do mesmo take, remove sobreposições de áudio
+e fragmentos, e mantém abertura no início e conclusão no fim.
 
 Veja `ARCHITECTURE.md` para os diagramas de arquitetura e fluxo, `CONTEXT.md` para limites
 e decisões, `PLANO.md` para o histórico das fases e `BACKLOG.md` para o que vem a seguir.

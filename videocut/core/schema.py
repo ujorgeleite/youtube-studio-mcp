@@ -157,6 +157,7 @@ class Beat:
     audio: str = SPEECH
     overlays: list[Overlay] = field(default_factory=list)
     evidence: list[Evidence] = field(default_factory=list)
+    chapter: str = ""
 
     @property
     def duration_s(self) -> float:

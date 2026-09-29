@@ -57,4 +57,8 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 | P2 | concluída | **Planejador em etapas** (Episódio07 gerou 72 s com 24 min de fala): base cronológica determinística (`story/chronology.py`: horário no nome DJI, falas ≥1,2 s e ≥3 palavras, sem repetições nem “música música”), capítulos numa resposta curta (`prompts/capitulos.md`), blocos por capítulo (`prompts/capitulo.md`), fala omitida pelo modelo volta, B-roll automático em falas longas, encaixe na duração pedida e aviso quando fica abaixo da metade. Real no Episódio07 (4B): 77 blocos, 14:48 para alvo de 15:00, 3,8 min de planejamento. |
 | R1 | concluída | Reaproveitamento: `Analysis.replan()` refaz só as histórias a partir de `analise/inventario.json`; tela Material mostra quantos takes já estão transcritos/descritos com o modelo atual (`reusable()`); botão “Refazer histórias” em Histórias. |
 
-Pendente: item 5 do `BACKLOG.md` (acelerar a visão), após A/B no Episódio06.
+| C1 | concluída | Coerência de cena (`story/coherence.py`, `config/estilo.yaml`): junta blocos seguidos do mesmo take/capítulo, remove sobreposições e fragmentos, papéis únicos. Episódio07: 86 → 54 blocos, 0 sobreposições. Regra do canal contra voz de GPS/rádio. |
+| B6 | concluída | Configurações (`core/settings.py`, `ui/settings_view.py`): 9 textos editáveis com validação de variáveis, prévia com dados reais, comparação, histórico, restaurar padrão; YAML recarregado sem reiniciar. |
+| B7 | concluída | Skills e agentes (`core/extensions.py`, `skills/`, `agentes/`, `story/agents.py`): frontmatter compatível com `SKILL.md`; 3 skills e 3 agentes padrão; `{skills}` nos prompts do planejador; agentes com capítulos do YouTube determinísticos. Registro de chamadas (`RecordingModel`) em `analise/registro/`. Agente real rodado no Episódio07 (4B, ~1 min). |
+
+Pendente: itens 5 e 8 do `BACKLOG.md`.

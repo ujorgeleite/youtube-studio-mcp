@@ -48,7 +48,7 @@ def merge(first: Beat, second: Beat, inventory: Inventory) -> Beat:
     end = max(first.end_s, second.end_s)
     evidence = [Evidence(first.take_id, first.start_s, end, _quote(inventory, first.take_id, first.start_s, end), observation)]
     return Beat(first.id, first.title, role, first.take_id, first.start_s, end, first.reason or second.reason,
-                SPEECH if SPEECH in (first.audio, second.audio) else first.audio, overlays, evidence)
+                SPEECH if SPEECH in (first.audio, second.audio) else first.audio, overlays, evidence, first.chapter or second.chapter)
 
 
 def word_count(beat: Beat) -> int:
@@ -68,7 +68,8 @@ def tidy(video: StoryVideo, inventory: Inventory, rules: SceneRules | None = Non
             trimmed += 1
             if beat.end_s - beat.start_s <= 0.3:
                 continue
-        if (previous and previous.take_id == beat.take_id and 0 <= beat.start_s - previous.end_s <= rules.merge_gap_s
+        if (previous and previous.take_id == beat.take_id and previous.chapter == beat.chapter
+                and 0 <= beat.start_s - previous.end_s <= rules.merge_gap_s
                 and beat.end_s - previous.start_s <= rules.max_block_s):
             beats[-1] = merge(previous, beat, inventory)
             merged += 1

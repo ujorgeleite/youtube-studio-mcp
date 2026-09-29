@@ -138,3 +138,23 @@ def test_pipeline_logs_every_call_and_runs_agents(media_dir, tmp_path, monkeypat
     project.chosen = report.proposals[0].id
     outputs = pipeline.Analysis(project, model_factory=ScriptedModel).run_agents(["revisor-ritmo"], report.proposals[0].videos[0].id)
     assert outputs[0].parent.name == "agentes" and outputs[0].is_file()
+
+
+def test_youtube_chapters_come_from_the_montage_not_the_model(tmp_path: Path):
+    video = StoryVideo("a1", "Dia", beats=[
+        Beat("b1", "Abre", "gancho", "T01", 0, 5, chapter="Abertura"),
+        Beat("b2", "Ida", "contexto", "T02", 0, 60, chapter="Chegada ao IKEA"),
+        Beat("b3", "Loja", "desenvolvimento", "T03", 0, 30, chapter="Chegada ao IKEA"),
+        Beat("b4", "Casa", "conclusao", "T04", 0, 20, chapter="Volta para casa"),
+    ])
+    assert agents.chapter_marks(video, None) == "00:00 Abertura\n00:05 Chegada ao IKEA\n01:35 Volta para casa"
+    assert "00:05 Chegada ao IKEA" in agents.agent_prompt(AGENTS.get("titulos-descricao"), video, None, "")
+
+    class Fenced:
+        name = "fake"
+
+        def generate(self, prompt, images=None, max_tokens=700):
+            return "```markdown\n## Títulos\n1. Um dia\n```"
+
+    text = agents.run_agent(AGENTS.get("revisor-ritmo"), Fenced(), video, None, "", tmp_path).read_text()
+    assert "```" not in text and "## Títulos" in text

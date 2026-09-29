@@ -8,9 +8,9 @@ marque `[x]` ao concluir (com `make test` verde e commit) e registre em `PLANO.m
 - [x] **3. Manter o Mac acordado durante o trabalho** — `18fe739`
 - [x] **4. Seletor “Rodar de madrugada” (sem senha)** — `16cdd85`
 - [ ] **5. Acelerar a visão sem perder qualidade** — só depois do A/B no Episódio06
-- [x] **6. Área de Configurações com os prompts editáveis** — falta checagem visual no navegador
-- [x] **7. Skills e agentes configuráveis na área de Configurações** — falta checagem visual no navegador
-- [ ] **8. Próximos ajustes de contexto e guardrails** — ver sugestões na resposta de 29/09 (exemplos aprovados como few-shot, painel de orçamento de tokens, regras proibidas por vídeo, comparação A/B de prompts)
+- [x] **6. Área de Configurações com os prompts editáveis** — `f41d5fc` (verificada no navegador com o Episódio07)
+- [x] **7. Skills e agentes configuráveis na área de Configurações** — `f41d5fc` (agente de títulos rodado de verdade no Episódio07)
+- [ ] **8. Ajuste fino de contexto e guardrails** — exemplos aprovados, regras “nunca usar”, orçamento de contexto, A/B de prompts, validação de estilo
 
 ## Contexto
 
@@ -227,6 +227,41 @@ comportamentos na mesma área de Configurações.
 histórias” e comparar duração média dos blocos; criar o agente “Títulos”, rodar
 com a análise salva e ver o resultado na Entrega; testes para registro,
 validação de frontmatter, injeção de skills e isolamento de escrita dos agentes.
+
+## Item 8 · Ajuste fino de contexto e guardrails
+
+**Objetivo:** fechar o ciclo “ver o que a IA recebeu → ajustar → comparar” sem
+editar código. O registro de chamadas (já pronto) mostra o problema; estes itens
+dão as ferramentas para corrigir e medir.
+
+1. **Exemplos aprovados (few-shot).** Na Revisão, um botão “Usar como exemplo”
+   guarda o bloco aprovado (momentos, papel, motivo) em `.state/ajustes/exemplos/`.
+   O prompt de capítulo recebe `{exemplos}` com 2–3 casos parecidos (mesmo tipo de
+   capítulo), para o modelo imitar suas escolhas reais. Editáveis em Configurações.
+2. **Regras “nunca usar” por vídeo.** Campo na tela Material (ex.: “não usar o
+   trecho do estacionamento”, “sem rosto do vizinho”): entra como regra rígida no
+   planejador e é conferida depois — blocos cuja fala/imagem contenha os termos
+   saem com aviso.
+3. **Termos proibidos determinísticos.** Lista em `config/estilo.yaml`
+   (`falas_ignoradas`: ex. “curva suave à esquerda”, “em 200 metros”) removida
+   na base cronológica, sem depender do modelo — resolve voz de GPS e anúncios.
+4. **Orçamento de contexto.** Em Configurações, mostrar para cada etapa o tamanho
+   real do último pedido (tokens) e o limite do modelo, com alerta quando o
+   inventário for truncado; opção de resumir momentos longos antes de enviar.
+5. **A/B de prompts.** Salvar duas versões de um prompt e rodar “Refazer
+   histórias” com cada uma sobre a mesma análise; tela lado a lado com duração,
+   blocos, capítulos e, se houver edição final, o `make compare` de cada versão.
+6. **Guardrails de estilo verificáveis.** Em `estilo.yaml`: máximo de blocos
+   seguidos sem imagem de apoio, proporção mínima de ação/ambiente, duração
+   máxima de fala contínua; relatório da proposta mostra o que violou e o
+   `tidy()` corrige o que der sem modelo.
+7. **Perfis por formato.** Conjunto salvo de prompts + skills + estilo (ex.:
+   “Vlog do dia”, “Tutorial”), escolhido na tela Material, para não reconfigurar
+   a cada episódio.
+
+**Verificação:** Episódio07 com “falas_ignoradas” (voz de GPS some da base),
+exemplo aprovado aparecendo no prompt de capítulo (prévia), A/B de duas versões
+de `capitulo.md` com números lado a lado; testes para cada regra determinística.
 
 ## Verificação (itens 1–4)
 

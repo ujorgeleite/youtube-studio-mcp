@@ -150,7 +150,7 @@ class ReportBuilder:
         beat = Beat(
             id=beat_id, title=title, role=_role(raw.get("papel")), take_id=moment.take_id,
             start_s=round(start, 3), end_s=round(end, 3), reason=str(raw.get("motivo") or "").strip(), audio=audio,
-            evidence=[self.evidence_for(moment, start, end)],
+            evidence=[self.evidence_for(moment, start, end)], chapter=str(raw.get("capitulo") or "").strip(),
         )
         beat.overlays = self.overlays(_list(raw.get("apoio")), beat, title, warnings)
         return beat

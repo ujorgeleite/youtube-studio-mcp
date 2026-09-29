@@ -58,10 +58,10 @@ flowchart TD
 
 | Pacote | Responsabilidade | Não pode |
 |---|---|---|
-| `core/` | Modelo de domínio (`schema.py`), estado persistido (`project.py`), proteção da origem (`safety.py`), cache por etapa, serialização de dataclasses, leitura de YAML | Importar qualquer outro pacote |
+| `core/` | Modelo de domínio (`schema.py`), estado persistido (`project.py`), proteção da origem (`safety.py`), textos editáveis (`settings.py`), skills e agentes (`extensions.py`), cache por etapa, serialização, leitura de YAML | Importar qualquer outro pacote |
 | `media/` | ffprobe (com rotação), miniaturas, frames, cenas, WAV de 16 kHz, proxy H.264, pareamento de `.LRF` | Chamar modelos |
 | `analysis/` | Whisper (`speech.py`), modelo visual (`vlm.py`, `vision.py`), download protegido (`models.py`), inventário de momentos, orquestração (`pipeline.py`) | Decidir histórias |
-| `story/` | Prompt editorial, validação determinística, critérios de suficiência, ajustes sem modelo | Ler mídia ou renderizar |
+| `story/` | Base cronológica (`chronology.py`), planejador em etapas (`planner.py`), validação determinística, critérios, coerência de cena (`coherence.py`), agentes (`agents.py`), ajustes sem modelo | Ler mídia ou renderizar |
 | `montage/` | Plano executável, render ffmpeg, SRT, FCP7 XML, relatório, pacote de entrega | Chamar modelos |
 | `ui/` | Telas, estado da sessão, rota de mídia, player JS | Conter regra de negócio |
 | `proof/` | Comparar com edição real e medir modelos | Ser usado pela UI |
@@ -398,6 +398,8 @@ raw__videocut/                        # core/project.py · Layout
 │   ├── historias.json                # StoryReport original (base do "Restaurar original")
 │   ├── capitulos__<hash>.json        # respostas do planejador por etapa (cache)
 │   ├── capituloNN__<hash>.json
+│   ├── registro/<execução>.jsonl     # cada pedido e resposta do modelo (RecordingModel)
+│   ├── agentes/<agente>__<video>.md  # resultados dos agentes
 │   ├── comparacao__<video>.md        # make compare
 │   └── benchmark.md / .json          # make benchmark
 ├── entregas/proposta-<id>__<video>/
@@ -406,6 +408,8 @@ raw__videocut/                        # core/project.py · Layout
 └── .work/                            # thumbs, frames, audio, proxies, render/segments
 
 videocut/.state/ultimo.json           # último projeto aberto na UI (gitignored)
+videocut/.state/ajustes/              # edições de prompts/regras, skills e agentes do usuário + historico/
+videocut/skills/, videocut/agentes/   # skills e agentes padrão (Markdown com frontmatter)
 ```
 
 Chave de cache: caminho + tamanho + mtime do original (`core/cache.py`). As
@@ -423,6 +427,12 @@ a etapa afetada.
 | `config/glossario.yaml` | prompt inicial e correções do Whisper | cache de transcrição |
 | `prompts/visao_ampla.md`, `visao_detalhe.md` | descrição visual | cache de visão |
 | `prompts/capitulos.md`, `prompts/capitulo.md` | planejamento editorial em etapas | cache do planejador |
+| `config/estilo.yaml` | coerência de cena depois do planejador (`story/coherence.py`) | nada; vale ao refazer histórias |
+| `config/execucao.yaml` | limites térmicos | nada |
+| `skills/*.md` ativas no projeto | texto `{skills}` dos prompts do planejador | cache do planejador |
+
+Todos são editáveis na tela ⚙ Configurações (`core/settings.py`): a edição em
+`.state/ajustes/` tem prioridade sobre o arquivo do repositório.
 
 ---
 
@@ -455,6 +465,10 @@ suíte cobre cada item (`make test`, sem baixar modelos).
 22. Fala útil que o modelo não escolheu nem descartou explicitamente volta para a montagem; nenhuma resposta curta do modelo encolhe o vídeo sozinha. (`tests/test_planner.py::test_omitted_speech_comes_back_and_explicit_discards_are_respected`)
 23. Se o planejador falhar, a base cronológica vira a proposta. (`test_model_failure_falls_back_to_the_chronological_base`)
 24. “Refazer histórias” nunca refaz Whisper nem visão: parte de `analise/inventario.json`. (`Analysis.replan`, `tests/test_planner.py`)
+25. Blocos seguidos do mesmo take e capítulo com pausa curta viram um só; nunca há áudio repetido entre blocos do mesmo take. (`tests/test_coherence.py`)
+26. Um prompt editado só é salvo com todas as variáveis obrigatórias e sem variáveis desconhecidas; o padrão do repositório nunca é alterado. (`tests/test_settings.py`)
+27. Todo modelo carregado pelo pipeline registra cada pedido e resposta em `analise/registro/`. (`test_pipeline_logs_every_call_and_runs_agents`)
+28. Agentes só escrevem em `analise/agentes/` e nunca alteram a montagem; capítulos do YouTube vêm dos capítulos da montagem, não do modelo. (`test_youtube_chapters_come_from_the_montage_not_the_model`)
 
 ## 11. Pontos em aberto
 

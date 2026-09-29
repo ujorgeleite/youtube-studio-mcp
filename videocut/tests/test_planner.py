@@ -153,3 +153,13 @@ def test_music_transcribed_as_repeated_words_is_not_speech():
     from story.chronology import repetitive
     assert repetitive("Música Música Música") and repetitive("la la la la ô")
     assert not repetitive("Bom dia, hoje a gente vai no IKEA")
+
+
+def test_beats_remember_their_chapter(tmp_path: Path):
+    inventory = day_inventory()
+    hook = next(moment.id for moment in base_cut(inventory).speech if moment.take_id == "T01")
+    outline = {"titulo": "Dia", "gancho": hook,
+               "capitulos": [{"titulo": "Ida", "takes": ["T02", "T03"]}, {"titulo": "Volta", "takes": ["T01", "T04"]}]}
+    video = planner.plan_stories(inventory, Scripted(outline), tmp_path).proposals[0].videos[0]
+    assert video.beats[0].chapter == "Abertura"
+    assert {beat.chapter for beat in video.beats[1:]} == {"Ida", "Volta"}

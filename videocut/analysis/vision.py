@@ -116,6 +116,11 @@ def _speech(transcript: Transcript | None, start_s: float, end_s: float) -> str:
     return transcript.text_between(start_s, end_s)[:600] if transcript else ""
 
 
+def vision_variant(model_name: str) -> str:
+    """Muda com o modelo, os prompts e a amostragem: só então a descrição é refeita."""
+    return fingerprint(model_name, load_prompt("visao_ampla"), load_prompt("visao_detalhe"), sorted(sampling().items()))
+
+
 def analyze_take_vision(
     take: Take,
     transcript: Transcript | None,
@@ -129,7 +134,7 @@ def analyze_take_vision(
     settings = sampling()
     broad_prompt, detail_prompt = load_prompt("visao_ampla"), load_prompt("visao_detalhe")
     cache = StageCache(cache_root, take.path)
-    variant = fingerprint(model.name, broad_prompt, detail_prompt, sorted(settings.items()))
+    variant = vision_variant(model.name)
     cached = None if refresh else cache.load("vision", variant)
     if cached is not None:
         return [from_data(VisualObservation, item) for item in cached]

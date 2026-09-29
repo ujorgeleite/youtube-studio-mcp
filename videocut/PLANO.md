@@ -43,7 +43,7 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 1. Autorizar o download do Qwen3-VL (4B 3,1 GB e/ou 8B 5,8 GB) — primeira análise real ou `make benchmark`.
 2. Rodar `make analyze` + `make compare` com um episódio já editado para medir a proposta contra a sua edição.
 3. Importar um `timelines/*__timeline.xml` no seu Filmora e confirmar se V1/V2/A1/A2 chegam corretos.
-4. Ajustar `config/canal.yaml` e `prompts/historias.md` a partir do que a comparação mostrar.
+4. Ajustar `config/canal.yaml`, `prompts/capitulos.md` e `prompts/capitulo.md` a partir do que a comparação mostrar.
 
 ## Backlog implementado
 
@@ -53,5 +53,8 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 | B2 | concluída | `core/thermal.py` (estado do macOS via JXA + °C via `macmon`), `ThermalGovernor` com histerese 95→80 °C / sério→razoável, `max_wait_min`; `ThermalGuardedModel` antes de cada chamada, entre takes do Whisper e antes de cada bloco do render. `config/execucao.yaml`. Interruptor por projeto, desligado por padrão. Progresso por take salvo após cada take descrito. |
 | B3 | concluída | `core/keepawake.py`: `caffeinate -i -m -s -w <pid>` com contador durante análise (UI e CLI) e render; selo na tela; aviso na bateria. |
 | B4 | concluída | `core/power.py` (tomada, baixo consumo, atualizações automáticas, tampa, caffeinate) só leitura; seletor “Rodar de madrugada” com checklist e atalhos verificados no macOS 26.4.1; confirmação na bateria; `make doctor` e `cli.py analyze --overnight`; `docs/rodar-a-noite.md`. |
+
+| P2 | concluída | **Planejador em etapas** (Episódio07 gerou 72 s com 24 min de fala): base cronológica determinística (`story/chronology.py`: horário no nome DJI, falas ≥1,2 s e ≥3 palavras, sem repetições nem “música música”), capítulos numa resposta curta (`prompts/capitulos.md`), blocos por capítulo (`prompts/capitulo.md`), fala omitida pelo modelo volta, B-roll automático em falas longas, encaixe na duração pedida e aviso quando fica abaixo da metade. Real no Episódio07 (4B): 77 blocos, 14:48 para alvo de 15:00, 3,8 min de planejamento. |
+| R1 | concluída | Reaproveitamento: `Analysis.replan()` refaz só as histórias a partir de `analise/inventario.json`; tela Material mostra quantos takes já estão transcritos/descritos com o modelo atual (`reusable()`); botão “Refazer histórias” em Histórias. |
 
 Pendente: item 5 do `BACKLOG.md` (acelerar a visão), após A/B no Episódio06.

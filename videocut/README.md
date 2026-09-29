@@ -108,7 +108,8 @@ em `docs/rodar-a-noite.md`.
 ## Ajustes editoriais
 
 - `config/canal.yaml` — regras do canal e formatos; pesam mais que o modelo.
-- `prompts/historias.md` — o pedido ao planejador editorial.
+- `prompts/capitulos.md` e `prompts/capitulo.md` — o planejador editorial:
+  primeiro divide o dia em capítulos, depois escolhe os blocos de cada um.
 - `prompts/visao_ampla.md`, `prompts/visao_detalhe.md` — descrição visual.
 - `config/glossario.yaml` — nomes e lugares para o Whisper.
 

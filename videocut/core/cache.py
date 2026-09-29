@@ -18,6 +18,15 @@ def fingerprint(*parts: Any) -> str:
     return hashlib.sha256("|".join(str(part) for part in parts).encode()).hexdigest()[:12]
 
 
+def is_cached(root: str | Path, source: str | Path, stage: str, variant: str = "") -> bool:
+    """Consulta sem criar pastas: usada para contar o que será reaproveitado."""
+    try:
+        folder = Path(root) / source_key(source)
+    except OSError:
+        return False
+    return (folder / (f"{stage}__{variant}.json" if variant else f"{stage}.json")).is_file()
+
+
 class StageCache:
     """Cache JSON por arquivo e etapa.
 

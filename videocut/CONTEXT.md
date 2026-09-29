@@ -69,7 +69,10 @@ Diagramas de pacotes, domínio, fluxo da UI, pipeline e invariantes: `ARCHITECTU
   momento, expande cortes de fala para frases inteiras e troca citações que não
   existem pela transcrição real. Critérios estruturais (`story/criteria.py`)
   nunca podem ser “melhorados” pelo modelo: vale o status mais severo.
-- A resposta bruta do planejador fica em cache; melhorar o validador não exige
+- O planejador trabalha em etapas (`story/planner.py`): base cronológica sem modelo,
+  capítulos numa resposta curta e blocos por capítulo; fala que o modelo só
+  esqueceu volta, e a duração pedida é respeitada ou sinalizada.
+- Cada resposta do planejador fica em cache; melhorar o validador não exige
   rodar o modelo de novo.
 - Render por segmento: cada bloco vira um MP4 normalizado (leitura com `-ss/-t`
   na entrada) e os segmentos são concatenados sem recodificar. A chave de cache

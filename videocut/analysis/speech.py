@@ -95,6 +95,13 @@ def release_model() -> None:
     mx.clear_cache()
 
 
+def transcript_variant(repo: str | None = None) -> str:
+    """Muda com o modelo, o glossário e o filtro: só então a transcrição é refeita."""
+    settings = glossary()
+    name = repo or models().get("whisper", "mlx-community/whisper-large-v3-turbo")
+    return fingerprint(name, settings.get("initial_prompt"), sorted(settings.get("corrections", {}).items()), FILTER_VERSION)
+
+
 def transcribe_take(
     take_id: str,
     source: str | Path,
@@ -106,7 +113,7 @@ def transcribe_take(
 ) -> Transcript:
     repo = model or models().get("whisper", "mlx-community/whisper-large-v3-turbo")
     settings = glossary()
-    variant = fingerprint(repo, settings.get("initial_prompt"), sorted(settings.get("corrections", {}).items()), FILTER_VERSION)
+    variant = transcript_variant(repo)
     cache = StageCache(cache_root, source)
     cached = None if refresh else cache.load("transcript", variant)
     if cached is not None:

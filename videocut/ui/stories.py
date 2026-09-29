@@ -9,6 +9,7 @@ from core.schema import CRITERION_MISSING, CRITERION_OK, VERDICT_INSUFFICIENT, V
 from core.timefmt import clock, span
 
 from . import theme
+from .analysis_view import start_replan
 from .evidence import open_evidence
 from .shell import Shell
 from .state import MATERIAL, REVIEW
@@ -48,6 +49,8 @@ def render(shell: Shell) -> None:
         theme.pill(VERDICT_TEXT.get(report.verdict, report.verdict), "amber" if report.verdict == VERDICT_INSUFFICIENT else "teal")
         for topic in report.topics[:5]:
             theme.pill(topic)
+        ui.space()
+        theme.button("Refazer histórias (reaproveita a análise)", lambda: start_replan(shell), small=True)
     if report.summary and report.verdict != VERDICT_INSUFFICIENT:
         ui.label(report.summary).classes("vc-muted mb-2")
     if project.intention and report.intention_check:

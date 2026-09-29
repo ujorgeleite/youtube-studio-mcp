@@ -110,30 +110,6 @@ def test_empty_or_garbage_answer_means_insufficient_material():
     assert build_report({"propostas": "x"}, example_inventory()).proposals == []
 
 
-def test_prompt_includes_channel_rules_intention_and_ids():
-    prompt = planner.build_prompt(example_inventory(), "Mostrar a adaptação", "vlog-reflexao", 3)
-    assert "Do Sul pra Fora" in prompt and "Mostrar a adaptação" in prompt
-    assert "T03.02 | 00:18–00:22 | fala" in prompt and "cerca de 3 minutos" in prompt
-    assert "{" in prompt and "{{" not in prompt
-
-
-def test_plan_stories_caches_raw_answer(tmp_path: Path):
-    class Model:
-        name = "fake"
-        calls = 0
-
-        def generate(self, prompt, images=None, max_tokens=700):
-            Model.calls += 1
-            return json.dumps(_single(FULL))
-
-        def release(self):
-            pass
-
-    first = planner.plan_stories(example_inventory(), Model(), tmp_path)
-    second = planner.plan_stories(example_inventory(), Model(), tmp_path)
-    assert Model.calls == 1 and first == second
-
-
 def test_shorten_drops_low_priority_beats_first():
     inventory = example_inventory()
     video = build_report(_single(FULL), inventory).proposals[0].videos[0]

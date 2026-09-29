@@ -6,6 +6,7 @@ from pathlib import Path
 
 from nicegui import run, ui
 
+from analysis.pipeline import reusable
 from core.config import load_yaml, min_take_s, models, vision_options
 from core.project import Project, default_output_dir
 from core.safety import SourceProtectionError
@@ -15,7 +16,7 @@ from media.catalog import catalog_folder
 from media.probe import MediaError, list_videos
 
 from . import memory_view, power_view, theme
-from .analysis_view import start_analysis
+from .analysis_view import start_analysis, start_replan
 from .filepicker import choose_directory
 from .media import media_url
 from .shell import Shell
@@ -210,11 +211,30 @@ def intention_panel(shell: Shell) -> None:
         with ui.column().classes("gap-1 mt-4"):
             ui.label("O que você recebe").classes("vc-h3")
             ui.label("✓ Inventário de falas e imagens\n✓ Propostas de um ou vários vídeos\n✓ Lacunas e evidências de cada ideia").classes("vc-small").style("white-space:pre-line")
+        reuse_panel(shell)
         start = theme.button("Analisar conteúdo →", lambda: start_analysis(shell), primary=True).classes("w-full mt-4")
         if not project.selected:
             start.disable()
         theme.note("Na primeira análise os modelos são baixados do Hugging Face (Whisper ~1,6 GB; "
                    "Qwen3-VL 4B ~3,1 GB ou 8B ~5,8 GB), com progresso na tela. Para baixar antes: make models.")
+
+
+def reuse_panel(shell: Shell) -> None:
+    """Mostra o que a análise anterior já deixou pronto para a seleção e o modelo atuais."""
+    reuse = reusable(shell.studio.project)
+    if not reuse.total or not (reuse.transcribed or reuse.described or reuse.inventory):
+        return
+    with ui.column().classes("w-full gap-1 mt-4").style("border-top:1px solid var(--line);padding-top:12px"):
+        theme.pill("Análise anterior encontrada", "teal")
+        ui.label(f"{reuse.transcribed}/{reuse.total} takes já transcritos e {reuse.described}/{reuse.total} já descritos "
+                 "com este modelo: serão reaproveitados.").classes("vc-small")
+        if reuse.described < reuse.total and reuse.described:
+            ui.label("Os demais serão analisados agora.").classes("vc-tiny vc-muted")
+        elif not reuse.described:
+            ui.label("A descrição visual foi feita com outro modelo ou outra configuração e será refeita.").classes("vc-tiny vc-muted")
+        if reuse.inventory:
+            theme.button("Só refazer as histórias (reaproveita tudo) →", lambda: start_replan(shell)).classes("w-full mt-2")
+            ui.label("Usa a intenção, o formato e a duração atuais; leva poucos minutos.").classes("vc-tiny vc-muted")
 
 
 def execution_panel(shell: Shell) -> None:

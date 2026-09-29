@@ -322,7 +322,8 @@ sequenceDiagram
     P->>P: build_inventory → Moments com ids T01.01…
     P->>D: analise/inventario.json
     P->>S: plan_stories (mesmo modelo, só texto)
-    S->>D: cache da resposta bruta historias__<hash>.json
+    S->>S: base cronológica (sem modelo) → capítulos → blocos por capítulo
+    S->>D: cache capitulos__<hash>.json e capituloNN__<hash>.json
     S->>S: build_report (validação determinística)
     P->>D: analise/historias.json + project.json
     P->>V: release()
@@ -395,7 +396,8 @@ raw__videocut/                        # core/project.py · Layout
 ├── analise/
 │   ├── inventario.json               # Inventory
 │   ├── historias.json                # StoryReport original (base do "Restaurar original")
-│   ├── historias__<hash>.json        # resposta bruta do planejador (cache)
+│   ├── capitulos__<hash>.json        # respostas do planejador por etapa (cache)
+│   ├── capituloNN__<hash>.json
 │   ├── comparacao__<video>.md        # make compare
 │   └── benchmark.md / .json          # make benchmark
 ├── entregas/proposta-<id>__<video>/
@@ -420,7 +422,7 @@ a etapa afetada.
 | `config/canal.yaml` | regras editoriais e formatos | cache do planejador |
 | `config/glossario.yaml` | prompt inicial e correções do Whisper | cache de transcrição |
 | `prompts/visao_ampla.md`, `visao_detalhe.md` | descrição visual | cache de visão |
-| `prompts/historias.md` | planejamento editorial | cache do planejador |
+| `prompts/capitulos.md`, `prompts/capitulo.md` | planejamento editorial em etapas | cache do planejador |
 
 ---
 
@@ -450,6 +452,9 @@ suíte cobre cada item (`make test`, sem baixar modelos).
 19. Takes novos mais curtos que `material.min_take_s` chegam desmarcados; escolhas salvas nunca são sobrescritas. (`test_merge_takes_deselects_only_new_short_takes`)
 20. O progresso da análise é salvo após cada take descrito: uma interrupção nunca apaga o que já foi feito. (`analysis/pipeline.py::Analysis.describe`)
 21. Antes de analisar, se a memória livre não comporta o modelo escolhido (ou há swap alto/pressão), o app mostra quem ocupa memória e pede confirmação; nunca encerra apps sozinho. (`tests/test_memory.py`)
+22. Fala útil que o modelo não escolheu nem descartou explicitamente volta para a montagem; nenhuma resposta curta do modelo encolhe o vídeo sozinha. (`tests/test_planner.py::test_omitted_speech_comes_back_and_explicit_discards_are_respected`)
+23. Se o planejador falhar, a base cronológica vira a proposta. (`test_model_failure_falls_back_to_the_chronological_base`)
+24. “Refazer histórias” nunca refaz Whisper nem visão: parte de `analise/inventario.json`. (`Analysis.replan`, `tests/test_planner.py`)
 
 ## 11. Pontos em aberto
 

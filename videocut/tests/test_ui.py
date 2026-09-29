@@ -51,8 +51,10 @@ def test_analysis_runs_in_background_and_moves_to_stories(media_dir: Path, tmp_p
     monkeypatch.setattr(state, "LAST_PROJECT", tmp_path / "last.json")
     monkeypatch.setattr(analysis_view.run, "io_bound", inline)
     monkeypatch.setattr(analysis_view, "MODEL_FACTORY", ScriptedModel)
+    words = [test_pipeline.Word(0.5, 1.0, "Olá"), test_pipeline.Word(1.1, 1.5, "a"), test_pipeline.Word(1.6, 2.0, "todos"),
+             test_pipeline.Word(2.1, 2.6, "hoje.")]
     monkeypatch.setattr("analysis.pipeline.transcribe_take", lambda take_id, *a, **k: test_pipeline.Transcript(
-        take_id, words=[test_pipeline.Word(0.5, 1.0, "Olá.")], sentences=[test_pipeline.group_sentences([test_pipeline.Word(0.5, 1.0, "Olá.")])[0]]))
+        take_id, words=words, sentences=test_pipeline.group_sentences(words)))
     monkeypatch.setattr("analysis.pipeline.release_model", lambda: None)
     monkeypatch.setattr("analysis.vision.sampling", lambda: {"broad_every_s": 3, "broad_max_frames": 2, "frames_per_call": 2,
                                                               "detail_windows_per_take": 0, "detail_frames_per_window": 2})

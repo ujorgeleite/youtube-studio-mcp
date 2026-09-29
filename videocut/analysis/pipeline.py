@@ -13,21 +13,22 @@ from pathlib import Path
 from time import perf_counter
 from typing import Callable
 
+from core.cache import is_cached
 from core.config import models, vision_repo
 from core.project import (
     STAGE_FAILED, STAGE_MEDIA, STAGE_PENDING, STAGE_READY, STAGE_SPEECH, STAGE_VISION, Project, TakeStatus,
 )
 from core.schema import Inventory, StoryReport, Take, Transcript, VisualObservation
-from core.thermal import ThermalGovernor
 from core.serial import from_data, read_json, write_json
+from core.thermal import ThermalGovernor
 from media.audio import extract_speech_audio
 from media.probe import MediaError, probe
 from story.planner import plan_stories
 
 from .inventory import build_inventory
 from .models import ensure_model
-from .speech import release_model, transcribe_take
-from .vision import analyze_take_vision
+from .speech import release_model, transcribe_take, transcript_variant
+from .vision import analyze_take_vision, vision_variant
 from .vlm import LocalModel, MlxModel, ThermalGuardedModel
 
 STAGES = (
@@ -86,6 +87,27 @@ def inventory_path(project: Project) -> Path:
 def load_inventory(project: Project) -> Inventory | None:
     data = read_json(inventory_path(project))
     return from_data(Inventory, data) if data is not None else None
+
+
+@dataclass(frozen=True)
+class Reuse:
+    transcribed: int
+    described: int
+    total: int
+    inventory: bool
+
+
+def reusable(project: Project) -> Reuse:
+    """Quanto da análise anterior vale para a seleção e o modelo atuais."""
+    takes = project.selected_takes
+    speech, vision = transcript_variant(), vision_variant(vision_repo(project.model or None))
+    cache = project.layout.cache
+    return Reuse(
+        transcribed=sum(1 for take in takes if not take.has_audio or is_cached(cache, take.path, "transcript", speech)),
+        described=sum(1 for take in takes if is_cached(cache, take.path, "vision", vision)),
+        total=len(takes),
+        inventory=inventory_path(project).is_file(),
+    )
 
 
 class Analysis:
@@ -223,28 +245,63 @@ class Analysis:
             self.check_cancel()
             if not self.active(takes):
                 raise RuntimeError("nenhum take pôde ser analisado")
-            self.enter(3)
             inventory = build_inventory(takes, transcripts, observations, self.failed)
             write_json(inventory_path(project), inventory)
-            report = plan_stories(
-                inventory, model, project.layout.analysis, intention=project.intention,
-                format_key=project.format, target_minutes=project.target_minutes, refresh=self.refresh,
-            )
-            write_json(project.layout.analysis / "historias.json", report)
-            project.report = report
-            project.chosen = None
-            project.review = {}
-            project.save()
-            self.monitor.note(f"{len(report.proposals)} proposta(s) · veredito: {report.verdict.replace('_', ' ')}")
-            return report
+            return self.plan(inventory, model)
         except Exception as error:
             self.monitor.error = str(error)
             project.save()
             raise
         finally:
-            if model is not None:
-                model.release()
-            for line in (self.governor.summary(), self.governor.warning):
-                if line:
-                    self.monitor.note(line)
-            self.monitor.finished_at = perf_counter()
+            self.finish(model)
+
+    def plan(self, inventory: Inventory, model: LocalModel) -> StoryReport:
+        project = self.project
+        self.enter(3)
+
+        def progress(message: str) -> None:
+            self.monitor.message = message
+
+        report = plan_stories(
+            inventory, model, project.layout.analysis, intention=project.intention, format_key=project.format,
+            target_minutes=project.target_minutes, refresh=self.refresh, progress=progress,
+        )
+        write_json(project.layout.analysis / "historias.json", report)
+        project.report = report
+        project.chosen = None
+        project.review = {}
+        project.renders = {}
+        project.save()
+        self.monitor.note(f"{len(report.proposals)} proposta(s) · veredito: {report.verdict.replace('_', ' ')}")
+        return report
+
+    def replan(self) -> StoryReport:
+        """Reaproveita transcrições e descrições já salvas: só o planejamento roda de novo."""
+        inventory = load_inventory(self.project)
+        if inventory is None:
+            raise RuntimeError("não há análise salva nesta pasta; rode a análise completa primeiro")
+        self.monitor.started_at = perf_counter()
+        self.monitor.finished_at = 0.0
+        model: LocalModel | None = None
+        try:
+            self.enter(0)
+            repo = vision_repo(self.project.model or None)
+            ensure_model(repo, "modelo visual (Qwen3-VL)", lambda fraction, message: setattr(self.monitor, "message", message))
+            self.monitor.note(f"Reaproveitando a análise de {len(inventory.takes)} takes ({len(inventory.moments)} momentos)")
+            self.monitor.message = "Carregando o modelo na memória…"
+            model = ThermalGuardedModel(self.model_factory(repo), self.governor)
+            return self.plan(inventory, model)
+        except Exception as error:
+            self.monitor.error = str(error)
+            self.project.save()
+            raise
+        finally:
+            self.finish(model)
+
+    def finish(self, model: LocalModel | None) -> None:
+        if model is not None:
+            model.release()
+        for line in (self.governor.summary(), self.governor.warning):
+            if line:
+                self.monitor.note(line)
+        self.monitor.finished_at = perf_counter()

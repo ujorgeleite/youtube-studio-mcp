@@ -21,12 +21,22 @@ STAGE_LABELS = {"pendente": "Na fila", "midia": "Preparando", "fala": "Transcrev
 
 
 async def start_analysis(shell: Shell) -> None:
+    project = shell.studio.project
+    if project is not None and not project.selected:
+        shell.notify("Selecione pelo menos um take.", "warning")
+        return
+    await run_job(shell, replan=False)
+
+
+async def start_replan(shell: Shell) -> None:
+    """Refaz só as histórias a partir da análise salva: sem Whisper e sem visão."""
+    await run_job(shell, replan=True)
+
+
+async def run_job(shell: Shell, replan: bool) -> None:
     studio = shell.studio
     project = studio.project
     if studio.busy or project is None or shell.refuse_if_working():
-        return
-    if not project.selected:
-        shell.notify("Selecione pelo menos um take.", "warning")
         return
     if project.overnight and await run.io_bound(on_ac_power) is False and not await confirm_on_battery(shell):
         return
@@ -37,15 +47,17 @@ async def start_analysis(shell: Shell) -> None:
     studio.analyzing = True
     studio.inventory_cache = None
     shell.go(ANALYSIS)
+    analysis = Analysis(project, studio.monitor, MODEL_FACTORY)
+    done = "Histórias refeitas com a análise existente." if replan else "Análise concluída."
     try:
         with KEEP_AWAKE:
-            await run.io_bound(Analysis(project, studio.monitor, MODEL_FACTORY).run)
+            await run.io_bound(analysis.replan if replan else analysis.run)
     except AnalysisCancelled:
         shell.notify("Análise cancelada. O que já foi transcrito e descrito ficou em cache.")
     except Exception as error:  # noqa: BLE001 - a mensagem aparece na tela; o lote já tratou falhas por take
         shell.notify(f"A análise não terminou: {error}", "negative")
     else:
-        shell.notify("Análise concluída.", "positive")
+        shell.notify(done, "positive")
     finally:
         studio.analyzing = False
     shell.go(STORIES if project.report and not studio.monitor.error and not studio.monitor.cancel.is_set() else ANALYSIS)

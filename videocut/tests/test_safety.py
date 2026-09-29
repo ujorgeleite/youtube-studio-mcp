@@ -69,7 +69,7 @@ def test_full_analysis_and_delivery_leave_the_source_folder_identical(raw: Path,
     before = snapshot(raw)
     monkeypatch.setattr("analysis.vision.sampling", lambda: {"broad_every_s": 3, "broad_max_frames": 2, "frames_per_call": 2,
                                                               "detail_windows_per_take": 1, "detail_frames_per_window": 2})
-    words = [Word(0.5, 1.0, "Hoje"), Word(1.1, 1.6, "passeamos.")]
+    words = [Word(0.5, 1.0, "Hoje"), Word(1.1, 1.6, "passeamos"), Word(1.7, 2.1, "no"), Word(2.2, 2.8, "parque.")]
     monkeypatch.setattr(pipeline, "transcribe_take", lambda take_id, *a, **k: Transcript(take_id, words=words, sentences=group_sentences(words)))
     monkeypatch.setattr(pipeline, "release_model", lambda: None)
     monkeypatch.setattr(render, "video_encoder", lambda: ["-c:v", "libx264", "-preset", "ultrafast"])

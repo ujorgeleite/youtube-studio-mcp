@@ -222,3 +222,49 @@ def test_cli_analyze_reports_short_takes(media_dir: Path, tmp_path: Path, capsys
     project = cli._open_project(str(media_dir), str(tmp_path / "out"), 5)
     assert project.selected == ["T02"]
     assert "desmarcado por ser curto (4.0 s): T01 · a_passeio.mov" in capsys.readouterr().out
+
+
+def test_overnight_switch_shows_checklist_and_long_run_suggestion(media_dir: Path, tmp_path: Path, monkeypatch):
+    from core.power import CheckItem
+    from ui import power_view
+    monkeypatch.setattr(state, "LAST_PROJECT", tmp_path / "last.json")
+    monkeypatch.setattr(power_view, "power_checklist", lambda pid: [
+        CheckItem("tomada", "Ligado na tomada", True, "Na tomada."),
+        CheckItem("atualizacoes", "Sem instalação automática do macOS", False, "Ligada.", "x-apple.systempreferences:teste")])
+    studio = Studio()
+    project = _project(media_dir, tmp_path)
+    project.overnight = True
+    studio.use(project)
+    with Client(page("/overnight-test")) as client:
+        Shell(studio, _renderers()).build()
+        texts = _texts(client)
+        assert "Rodar de madrugada" in texts and "Ligado na tomada" in texts
+        assert "Abrir Ajustes" in texts
+        assert any(text.startswith("Sugestão: ligue também o modo de cargas longas") for text in texts)
+
+
+def test_overnight_on_battery_asks_before_starting(media_dir: Path, tmp_path: Path, monkeypatch):
+    async def inline(function, *args, **kwargs):
+        return function(*args, **kwargs)
+
+    async def declined(shell):
+        return False
+
+    monkeypatch.setattr(state, "LAST_PROJECT", tmp_path / "last.json")
+    monkeypatch.setattr(analysis_view.run, "io_bound", inline)
+    monkeypatch.setattr(analysis_view, "on_ac_power", lambda: False)
+    monkeypatch.setattr(analysis_view, "confirm_on_battery", declined)
+    studio = Studio()
+    project = _project(media_dir, tmp_path)
+    project.overnight = True
+    studio.use(project)
+
+    async def exercise():
+        monkeypatch.setattr(core, "loop", asyncio.get_running_loop())
+        with Client(page("/battery-test")):
+            shell = Shell(studio, _renderers())
+            shell.build()
+            await analysis_view.start_analysis(shell)
+            assert studio.monitor is None and not studio.analyzing
+
+    asyncio.run(exercise())

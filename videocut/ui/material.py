@@ -14,7 +14,7 @@ from core.timefmt import clock
 from media.catalog import catalog_folder
 from media.probe import MediaError
 
-from . import theme
+from . import power_view, theme
 from .analysis_view import start_analysis
 from .filepicker import choose_directory
 from .media import media_url
@@ -216,3 +216,14 @@ def execution_panel(shell: Shell) -> None:
                   on_change=lambda event: toggle("long_run", bool(event.value))).props("color=teal-3")
         ui.label(f"Pausa entre etapas quando o Mac passa de {limits.pause_temp_c:g} °C ou o macOS indica “sério”, "
                  f"e retoma abaixo de {limits.resume_temp_c:g} °C. Use em análises e renders longos.").classes("vc-tiny vc-muted")
+        ui.switch("Rodar de madrugada", value=project.overnight,
+                  on_change=lambda event: toggle("overnight", bool(event.value))).props("color=teal-3").classes("mt-3")
+        ui.label("Mantém o Mac e o disco acordados durante o trabalho (a tela pode apagar) e confere os ajustes "
+                 "de energia. Nada no macOS é alterado nem pede senha.").classes("vc-tiny vc-muted")
+        if project.overnight:
+            with ui.column().classes("w-full gap-0 mt-2"):
+                power_view.overnight_checklist()
+            if not project.long_run:
+                with ui.row().classes("items-center gap-2 mt-2"):
+                    ui.label("Sugestão: ligue também o modo de cargas longas para o Mac esfriar entre etapas.").classes("vc-tiny warn")
+                    theme.button("Ligar", lambda: toggle("long_run", True), small=True)

@@ -1,13 +1,12 @@
 # Backlog do VideoCut
 
-Itens planejados e ainda **não implementados**. Quando a pessoa pedir
-“implementa o backlog”, siga na ordem 1 → 2 → 3 → 4, marque `[x]` ao concluir
-cada item (com `make test` verde e um commit por item) e registre em `PLANO.md`.
+Quando a pessoa pedir “implementa o backlog”, siga os itens abertos na ordem,
+marque `[x]` ao concluir (com `make test` verde e commit) e registre em `PLANO.md`.
 
-- [x] **1. Desmarcar takes curtos demais**
-- [x] **2. Modo de cargas longas (proteção térmica)** — requer `brew install macmon` (pedir permissão)
-- [ ] **3. Manter o Mac acordado durante o trabalho**
-- [ ] **4. Seletor “Rodar de madrugada” (sem senha)**
+- [x] **1. Desmarcar takes curtos demais** — `5b69f2e`
+- [x] **2. Modo de cargas longas (proteção térmica)** — `18fe739` (`macmon` instalado)
+- [x] **3. Manter o Mac acordado durante o trabalho** — `18fe739`
+- [x] **4. Seletor “Rodar de madrugada” (sem senha)**
 - [ ] **5. Acelerar a visão sem perder qualidade** — só depois do A/B no Episódio06
 
 ## Contexto

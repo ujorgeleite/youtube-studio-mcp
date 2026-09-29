@@ -443,8 +443,12 @@ suíte cobre cada item (`make test`, sem baixar modelos).
 12. Blocos protegidos nunca saem na versão mais curta. (`test_shorten_never_removes_protected_beats`)
 13. Qualquer edição na revisão invalida `project.renders`. (`ui/review.py::save`)
 14. A interface e a CLI rodam offline: `enable_offline()` antes de qualquer import de `huggingface_hub`; só o downloader liga a rede. (verificado com proxy inexistente; ver `PLANO.md`)
-16. Toda ação demorada da UI tem feedback visual (o que faz, tempo, loader). (`tests/test_activity.py`)
 15. Download de modelo nunca trava a análise: sem bytes por 90 s, o subprocesso é encerrado e retomado; após 5 tentativas, erro claro. (`tests/test_models.py`)
+16. Toda ação demorada da UI tem feedback visual (o que faz, tempo, loader). (`tests/test_activity.py`)
+17. Com o modo de cargas longas ligado, nenhuma chamada ao modelo nem bloco de render começa com o Mac acima do limite; a retomada exige ficar abaixo do limite de volta (histerese). (`tests/test_thermal.py`, `test_render_produces_final_video_with_expected_duration`)
+18. Enquanto análise ou render rodam, o Mac não dorme (`caffeinate -i -m -s -w <pid>`), e o bloqueio termina junto com o trabalho, inclusive em erro. Nenhum ajuste do macOS é alterado. (`tests/test_power.py`)
+19. Takes novos mais curtos que `material.min_take_s` chegam desmarcados; escolhas salvas nunca são sobrescritas. (`test_merge_takes_deselects_only_new_short_takes`)
+20. O progresso da análise é salvo após cada take descrito: uma interrupção nunca apaga o que já foi feito. (`analysis/pipeline.py::Analysis.describe`)
 
 ## 11. Pontos em aberto
 

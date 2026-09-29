@@ -45,8 +45,13 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 3. Importar um `timelines/*__timeline.xml` no seu Filmora e confirmar se V1/V2/A1/A2 chegam corretos.
 4. Ajustar `config/canal.yaml` e `prompts/historias.md` a partir do que a comparação mostrar.
 
-## Próximos passos
+## Backlog implementado
 
-Ver `BACKLOG.md`: takes curtos, modo de cargas longas (pausa térmica), Mac acordado, seletor “Rodar de madrugada” e aceleração da visão. Implementar quando pedido (“implementa o backlog”).
-
+| Item | Situação | Observações |
+|---|---|---|
 | B1 | concluída | Takes novos < `material.min_take_s` (5 s) chegam desmarcados (`Project.merge_takes`); selo “curto”, botão “Desmarcar curtos”, resumo; `cli.py analyze --min-take-s`. |
+| B2 | concluída | `core/thermal.py` (estado do macOS via JXA + °C via `macmon`), `ThermalGovernor` com histerese 95→80 °C / sério→razoável, `max_wait_min`; `ThermalGuardedModel` antes de cada chamada, entre takes do Whisper e antes de cada bloco do render. `config/execucao.yaml`. Interruptor por projeto, desligado por padrão. Progresso por take salvo após cada take descrito. |
+| B3 | concluída | `core/keepawake.py`: `caffeinate -i -m -s -w <pid>` com contador durante análise (UI e CLI) e render; selo na tela; aviso na bateria. |
+| B4 | concluída | `core/power.py` (tomada, baixo consumo, atualizações automáticas, tampa, caffeinate) só leitura; seletor “Rodar de madrugada” com checklist e atalhos verificados no macOS 26.4.1; confirmação na bateria; `make doctor` e `cli.py analyze --overnight`; `docs/rodar-a-noite.md`. |
+
+Pendente: item 5 do `BACKLOG.md` (acelerar a visão), após A/B no Episódio06.

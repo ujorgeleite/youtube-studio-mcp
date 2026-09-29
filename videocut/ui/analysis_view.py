@@ -7,6 +7,7 @@ from nicegui import run, ui
 from analysis.pipeline import STAGES, Analysis, AnalysisCancelled, AnalysisMonitor
 from analysis.vlm import MlxModel
 from core.keepawake import KEEP_AWAKE
+from core.power import on_ac_power
 from core.project import STAGE_FAILED, STAGE_READY
 from core.timefmt import stopwatch
 
@@ -27,6 +28,8 @@ async def start_analysis(shell: Shell) -> None:
     if not project.selected:
         shell.notify("Selecione pelo menos um take.", "warning")
         return
+    if project.overnight and await run.io_bound(on_ac_power) is False and not await confirm_on_battery(shell):
+        return
     studio.monitor = AnalysisMonitor()
     studio.analyzing = True
     studio.inventory_cache = None
@@ -43,6 +46,17 @@ async def start_analysis(shell: Shell) -> None:
     finally:
         studio.analyzing = False
     shell.go(STORIES if project.report and not studio.monitor.error and not studio.monitor.cancel.is_set() else ANALYSIS)
+
+
+async def confirm_on_battery(shell: Shell) -> bool:
+    with shell.root, ui.dialog() as dialog, theme.panel("amber").style("width:min(520px,calc(100vw - 35px))"):
+        theme.pill("Rodar de madrugada", "amber")
+        ui.label("O Mac está na bateria").classes("vc-h2 mt-2")
+        ui.label("Uma análise longa pode esgotar a bateria e parar no meio. Ligue o carregador ou continue assim mesmo.").classes("vc-muted")
+        with ui.row().classes("gap-3 mt-4"):
+            theme.button("Continuar na bateria", lambda: dialog.submit(True))
+            theme.button("Vou ligar na tomada", lambda: dialog.submit(False), primary=True)
+    return bool(await dialog)
 
 
 def render(shell: Shell) -> None:

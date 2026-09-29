@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import os
 import shutil
 import subprocess
 import sys
@@ -16,8 +17,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from analysis.pipeline import Analysis, AnalysisMonitor, load_inventory  # noqa: E402
 from analysis.speech import transcribe_take  # noqa: E402
 from core.config import min_take_s, model_cached, models, vision_options  # noqa: E402
-from core.offline import enable_offline  # noqa: E402
 from core.keepawake import KEEP_AWAKE  # noqa: E402
+from core.offline import enable_offline  # noqa: E402
+from core.power import power_checklist  # noqa: E402
 from core.project import Project  # noqa: E402
 from core.safety import SourceProtectionError, write_text  # noqa: E402
 from core.serial import write_json  # noqa: E402
@@ -51,6 +53,10 @@ def doctor(_: argparse.Namespace) -> int:
         print(f"✓ temperatura: {reading.label}")
     else:
         print(f"· temperatura em °C indisponível: brew install macmon (estado do macOS: {reading.label})")
+    print("Para rodar de madrugada:")
+    marks = {"ok": "✓", "pendente": "◷", "lembrete": "·"}
+    for item in power_checklist(os.getpid()):
+        print(f"  {marks[item.status]} {item.label}: {item.detail}")
     print("Pronto." if ok else "Corrija os itens com ✗.")
     return 0 if ok else 1
 
@@ -87,7 +93,12 @@ def analyze(args: argparse.Namespace) -> int:
     project.model = args.model or project.model
     project.target_minutes = args.minutes or project.target_minutes
     project.long_run = args.long_run or project.long_run
+    project.overnight = args.overnight or project.overnight
     project.save()
+    if project.overnight:
+        for item in power_checklist(os.getpid()):
+            if item.ok is False:
+                print(f"◷ {item.label}: {item.detail}")
     monitor = AnalysisMonitor()
     worker = Thread(target=lambda: _run(Analysis(project, monitor)), daemon=True)
     printed = 0
@@ -174,6 +185,8 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--minutes", type=float)
             command.add_argument("--long-run", action="store_true",
                                  help="pausa para esfriar quando o Mac passa do limite (config/execucao.yaml)")
+            command.add_argument("--overnight", action="store_true",
+                                 help="avisa ajustes de energia pendentes antes de começar (o Mac fica acordado sempre)")
             command.add_argument("--min-take-s", type=float, default=min_take_s(),
                                  help="takes novos mais curtos ficam fora da análise (padrão: config/modelos.yaml)")
         if name == "compare":

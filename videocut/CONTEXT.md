@@ -41,6 +41,9 @@ Nenhum vídeo original é alterado.
    com rede, sem xet, com vigia de travamento e retomada.
 6. **Um modelo pesado por vez.** Whisper e o modelo visual não ficam carregados
    juntos.
+7. **Cargas longas cuidam do Mac.** `core/thermal.py` pausa acima do limite
+   (opcional por projeto); `core/keepawake.py` impede o sono durante o trabalho;
+   `core/power.py` só lê ajustes de energia — o app nunca altera o macOS.
 
 ## Estrutura
 

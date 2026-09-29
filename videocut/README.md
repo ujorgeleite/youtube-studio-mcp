@@ -87,6 +87,14 @@ make benchmark INPUT=/caminho/raw MODELS=qwen3-vl-4b,qwen3-vl-8b
 recall, precisão e concordância de ordem. `benchmark` mede tempo, memória de
 pico e respostas inválidas de cada modelo, com descrições lado a lado.
 
+## Rodar de madrugada
+
+Painel **Execução** da tela Material → **Rodar de madrugada** (e, de
+preferência, **Modo de cargas longas**). O app mantém o Mac acordado durante o
+trabalho, confere tomada, baixo consumo e atualizações automáticas e abre o
+painel certo dos Ajustes para o que estiver pendente, sem pedir senha. Detalhes
+em `docs/rodar-a-noite.md`.
+
 ## Ajustes editoriais
 
 - `config/canal.yaml` — regras do canal e formatos; pesam mais que o modelo.

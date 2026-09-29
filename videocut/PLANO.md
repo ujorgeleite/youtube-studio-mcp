@@ -13,7 +13,7 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 - [x] **2. Mídia** — ffprobe, miniaturas, amostragem de frames, mudanças de cena, áudio e proxies
 - [x] **3. Fala** — Whisper MLX com palavras, frases, glossário e cache
 - [x] **4. Visão** — MLX-VLM/Qwen3-VL, passagem ampla + detalhada, JSON, cache por modelo
-- [ ] **5. Histórias** — inventário, planejador editorial, propostas, suficiência, validador
+- [x] **5. Histórias** — inventário, planejador editorial, propostas, suficiência, validador
 - [ ] **6. Montagem e render** — faixas de imagem/áudio, B-roll, crossfades, formato, ffmpeg, SRT, relatório
 - [ ] **7. Timeline Filmora** — XML editável e pacote de entrega
 - [ ] **8. UI Material + Análise** — telas 1–2, análise em background por take
@@ -29,3 +29,4 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 | 2 | concluída | `media/`: probe com rotação, catálogo que preserva ids, frames em cache, cenas via ffmpeg, WAV 16 kHz, proxy H.264. |
 | 3 | concluída | `analysis/speech.py`: Whisper MLX, frases por pontuação/pausa, cache por modelo+glossário, `release_model()`. Smoke test real ok (5,6 s). |
 | 4 | concluída | `analysis/vlm.py` (MlxModel + JSON tolerante com nova tentativa), `analysis/vision.py` (ampla + detalhe). Repos confirmados no HF: 4B 3,1 GB, 8B 5,8 GB. Pesos ainda não baixados: smoke test real fica para a fase 11, com autorização. |
+| 5 | concluída | Inventário por momentos citáveis (`T05.03`), `prompts/historias.md`, `config/canal.yaml` editável, validador anti-invenção, critérios estruturais (o mais severo vence), cache da resposta bruta, `shorten()` sem modelo. |

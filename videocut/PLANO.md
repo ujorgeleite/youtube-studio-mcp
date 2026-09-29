@@ -14,7 +14,7 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 - [x] **3. Fala** — Whisper MLX com palavras, frases, glossário e cache
 - [x] **4. Visão** — MLX-VLM/Qwen3-VL, passagem ampla + detalhada, JSON, cache por modelo
 - [x] **5. Histórias** — inventário, planejador editorial, propostas, suficiência, validador
-- [ ] **6. Montagem e render** — faixas de imagem/áudio, B-roll, crossfades, formato, ffmpeg, SRT, relatório
+- [x] **6. Montagem e render** — faixas de imagem/áudio, B-roll, crossfades, formato, ffmpeg, SRT, relatório
 - [ ] **7. Timeline Filmora** — XML editável e pacote de entrega
 - [ ] **8. UI Material + Análise** — telas 1–2, análise em background por take
 - [ ] **9. UI Histórias + Revisão** — telas 3–4, evidências, blocos, troca de vídeo, versão mais curta
@@ -30,3 +30,4 @@ Referência de interface: `../VideoCut — wireframe de montagem por conteúdo.h
 | 3 | concluída | `analysis/speech.py`: Whisper MLX, frases por pontuação/pausa, cache por modelo+glossário, `release_model()`. Smoke test real ok (5,6 s). |
 | 4 | concluída | `analysis/vlm.py` (MlxModel + JSON tolerante com nova tentativa), `analysis/vision.py` (ampla + detalhe). Repos confirmados no HF: 4B 3,1 GB, 8B 5,8 GB. Pesos ainda não baixados: smoke test real fica para a fase 11, com autorização. |
 | 5 | concluída | Inventário por momentos citáveis (`T05.03`), `prompts/historias.md`, `config/canal.yaml` editável, validador anti-invenção, critérios estruturais (o mais severo vence), cache da resposta bruta, `shorten()` sem modelo. |
+| 6 | concluída | Render por segmento (1 por bloco, `-ss/-t` na entrada, cache por posição relativa: reordenar reaproveita) + concat sem recodificar. VideoToolbox no Mac. Formato pela maioria (orientação/FPS NTSC), pillarbox. Ambiente do B-roll a −22 dB, fades de 80 ms. SRT remapeado, relatório Markdown. |

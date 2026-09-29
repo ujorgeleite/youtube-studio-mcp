@@ -2,11 +2,8 @@ VENV   := .venv
 PYTHON := $(VENV)/bin/python
 PIP    := $(PYTHON) -m pip
 
-INPUT  ?= ./raw
-MODEL  ?= qwen3-vl-8b
-
 .DEFAULT_GOAL := help
-.PHONY: help install doctor test test-verbose ui analyze stories check-ffmpeg clean
+.PHONY: help install test test-verbose ui check-ffmpeg clean
 
 help: ## List available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -23,6 +20,9 @@ test: ## Run the tests (no model downloads, no real inference)
 
 test-verbose: ## Run the tests with full output
 	$(PYTHON) -m pytest -v
+
+ui: check-ffmpeg ## Launch the VideoCut interface (http://localhost:8090)
+	$(PYTHON) ui/app.py
 
 check-ffmpeg: ## Verify ffmpeg/ffprobe are installed on the system
 	@command -v ffmpeg >/dev/null 2>&1 || { echo "ffmpeg não encontrado no PATH (brew install ffmpeg)"; exit 1; }

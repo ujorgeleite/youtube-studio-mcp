@@ -1,0 +1,168 @@
+"""Etapa 1: escolher a pasta, os takes e o que se quer contar."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from nicegui import run, ui
+
+from core.config import load_yaml, models, vision_options
+from core.project import Project, default_output_dir
+from core.timefmt import clock
+from media.catalog import catalog_folder
+from media.probe import MediaError
+
+from . import theme
+from .analysis_view import start_analysis
+from .filepicker import choose_directory
+from .media import media_url
+from .shell import Shell
+from .state import STORIES
+
+
+async def open_folder(shell: Shell, folder: str, output: str) -> None:
+    studio = shell.studio
+    if not folder.strip():
+        shell.notify("Informe a pasta com os takes.", "warning")
+        return
+    project = Project.open(folder.strip(), output.strip() or None)
+    try:
+        takes, errors = await run.io_bound(catalog_folder, project.folder, project.layout.thumbnails, project.takes)
+    except MediaError as error:
+        shell.notify(str(error), "negative")
+        return
+    known = {take.id for take in project.takes}
+    project.takes = takes
+    project.selected = [take.id for take in takes if take.id in set(project.selected) or take.id not in known]
+    project.save()
+    studio.use(project)
+    studio.catalog_errors = errors
+    if not takes:
+        shell.notify("Nenhum vídeo encontrado nesta pasta.", "warning")
+    shell.refresh()
+
+
+def render(shell: Shell) -> None:
+    studio = shell.studio
+    project = studio.project
+    theme.title("01 / Material", "Que história existe nos seus takes?",
+                "Comece pelos originais. A análise vai cruzar o que aparece com o que é dito.")
+    with theme.layout():
+        with theme.stack():
+            source_panel(shell)
+            if project and project.takes:
+                take_grid(shell)
+            elif project:
+                with theme.panel():
+                    ui.label("Nenhum vídeo encontrado nesta pasta.").classes("vc-muted")
+        with theme.stack():
+            if project and project.takes:
+                intention_panel(shell)
+            with theme.panel():
+                theme.eyebrow("Uma decisão de cada vez")
+                ui.label("Primeiro entender o material. Depois escolher a história. Só então montar.").classes("vc-muted vc-small")
+
+
+def source_panel(shell: Shell) -> None:
+    project = shell.studio.project
+    with theme.panel():
+        with ui.row().classes("w-full items-end gap-3 no-wrap"):
+            folder = ui.input("Pasta raw", value=project.folder if project else "").classes("vc-field flex-grow").props("outlined dense")
+            output = ui.input("Saída", value=project.output_dir if project else "").classes("vc-field flex-grow").props("outlined dense")
+
+            async def browse() -> None:
+                chosen = await run.io_bound(choose_directory)
+                if chosen:
+                    folder.value = chosen.rstrip("/")
+                    output.value = str(default_output_dir(folder.value))
+                    await open_folder(shell, folder.value, output.value)
+
+            theme.button("Escolher pasta…", browse)
+            theme.button("Carregar", lambda: open_folder(shell, folder.value, output.value))
+        theme.note("Os originais nunca são alterados. Proxies .LRF da câmera com o mesmo nome são usados para "
+                   "visualizar e analisar; a montagem final lê os arquivos originais.")
+        for name, error in shell.studio.catalog_errors.items():
+            ui.label(f"{name}: {error}").classes("vc-tiny bad")
+        if project and project.report:
+            with ui.row().classes("w-full items-center mt-3"):
+                theme.pill("Análise anterior encontrada", "teal")
+                ui.label(f"{len(project.report.proposals)} proposta(s) salvas").classes("vc-tiny vc-muted")
+                ui.space()
+                theme.button("Ver histórias →", lambda: shell.go(STORIES), small=True)
+
+
+def _selected_summary(project: Project) -> str:
+    total = sum(take.duration_s for take in project.selected_takes)
+    return f"{len(project.selected)} selecionados · {clock(total)} de material"
+
+
+def take_grid(shell: Shell) -> None:
+    project = shell.studio.project
+
+    def toggle(take_id: str, value: bool) -> None:
+        chosen = set(project.selected)
+        chosen.add(take_id) if value else chosen.discard(take_id)
+        project.selected = [take.id for take in project.takes if take.id in chosen]
+        project.save()
+        shell.main.refresh()
+
+    def set_all(value: bool) -> None:
+        project.selected = [take.id for take in project.takes] if value else []
+        project.save()
+        shell.main.refresh()
+
+    with ui.row().classes("w-full justify-between items-center"):
+        ui.label(f"{len(project.takes)} takes").classes("vc-h3")
+        with ui.row().classes("gap-2"):
+            theme.button("Todos", lambda: set_all(True), small=True)
+            theme.button("Limpar", lambda: set_all(False), small=True)
+    with ui.element("div").classes("vc-grid"):
+        for take in project.takes:
+            checked = take.id in project.selected
+            with ui.element("article").classes("vc-take" + (" checked" if checked else "")):
+                with ui.element("div").classes("vc-thumb"):
+                    if take.thumbnail and Path(take.thumbnail).is_file():
+                        ui.image(media_url(take.thumbnail)).classes("w-full h-full")
+                    ui.label(clock(take.duration_s)).classes("vc-duration")
+                with ui.column().classes("p-3 gap-1"):
+                    ui.checkbox(f"{take.id} · {take.name}", value=checked,
+                                on_change=lambda event, take_id=take.id: toggle(take_id, event.value)).classes("vc-small")
+                    with ui.row().classes("gap-2 items-center"):
+                        ui.label(f"{take.width}×{take.height} · {take.fps:g} fps").classes("vc-tiny vc-muted")
+                        if take.proxy:
+                            theme.pill("LRF", "teal")
+                        if not take.has_audio:
+                            theme.pill("sem áudio", "amber")
+    ui.label(_selected_summary(project)).classes("vc-tiny vc-muted")
+
+
+def intention_panel(shell: Shell) -> None:
+    project = shell.studio.project
+    formats = load_yaml("canal.yaml").get("formatos", {"auto": "Deixar o sistema sugerir"})
+    options = {key: value["label"] for key, value in vision_options().items()}
+    default_model = models().get("vision", {}).get("default")
+
+    def update(field: str, value) -> None:
+        setattr(project, field, value)
+        project.save()
+
+    with theme.panel():
+        ui.label("Sua intenção orienta a proposta").classes("vc-h3")
+        ui.textarea("O que você queria contar? (opcional)", value=project.intention,
+                    on_change=lambda event: update("intention", event.value or "")).classes("vc-field w-full").props("outlined autogrow")
+        ui.label("Sem uma intenção, o sistema sugere temas a partir do material.").classes("vc-tiny vc-muted")
+        ui.select({key: value.split(" — ")[0] for key, value in formats.items()}, label="Formato editorial",
+                  value=project.format if project.format in formats else "auto",
+                  on_change=lambda event: update("format", event.value)).classes("vc-field w-full mt-3").props("outlined dense")
+        ui.number("Duração desejada (min, opcional)", value=project.target_minutes, min=0.5, step=0.5,
+                  on_change=lambda event: update("target_minutes", event.value or None)).classes("vc-field w-full mt-3").props("outlined dense")
+        ui.select(options, label="Modelo visual local", value=project.model or default_model,
+                  on_change=lambda event: update("model", event.value)).classes("vc-field w-full mt-3").props("outlined dense")
+        with ui.column().classes("gap-1 mt-4"):
+            ui.label("O que você recebe").classes("vc-h3")
+            ui.label("✓ Inventário de falas e imagens\n✓ Propostas de um ou vários vídeos\n✓ Lacunas e evidências de cada ideia").classes("vc-small").style("white-space:pre-line")
+        start = theme.button("Analisar conteúdo →", lambda: start_analysis(shell), primary=True).classes("w-full mt-4")
+        if not project.selected:
+            start.disable()
+        theme.note("Na primeira análise os modelos são baixados do Hugging Face (Whisper ~1,6 GB; "
+                   "Qwen3-VL 4B ~3,1 GB ou 8B ~5,8 GB). Depois tudo roda offline e fica em cache.")

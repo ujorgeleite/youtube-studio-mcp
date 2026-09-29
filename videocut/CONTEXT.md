@@ -34,6 +34,8 @@ Nenhum vídeo original é alterado.
 
 ## Estrutura
 
+Diagramas de pacotes, domínio, fluxo da UI, pipeline e invariantes: `ARCHITECTURE.md`.
+
 | Pacote | Responsabilidade |
 |---|---|
 | `core/` | Schemas, serialização, projeto persistido, cache, formatação de tempo |

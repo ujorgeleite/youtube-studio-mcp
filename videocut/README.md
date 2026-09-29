@@ -74,4 +74,5 @@ pico e respostas inválidas de cada modelo, com descrições lado a lado.
 
 Mudar um prompt invalida só o cache da etapa afetada.
 
-Veja `CONTEXT.md` para arquitetura e `PLANO.md` para o histórico das fases.
+Veja `ARCHITECTURE.md` para os diagramas de arquitetura e fluxo, `CONTEXT.md` para limites
+e decisões, e `PLANO.md` para o histórico das fases.

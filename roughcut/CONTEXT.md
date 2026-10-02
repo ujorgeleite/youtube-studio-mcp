@@ -18,6 +18,14 @@ O foco é preparar material para edição humana. Nenhum vídeo raw é alterado.
   internos apenas quando o domínio e as dependências forem compatíveis.
 - `ffmpeg` e `ffprobe` são pré requisitos do sistema, fora do `requirements.txt`.
 
+## Fonte de verdade para agentes
+
+O inventário operacional completo, os contratos, limites e as fronteiras entre
+produção e protótipo estão em [BACKEND_CAPABILITIES.md](BACKEND_CAPABILITIES.md).
+Leia-o antes de implementar qualquer capacidade de mídia: `corte_inteligente/`
+contém tanto um wireframe/state machine quanto adaptadores ainda não conectados;
+o backend de produção continua em `silence/` e `smartcut/`.
+
 ## Produtos existentes
 
 ### 1. Pipeline de pré montagem
@@ -57,6 +65,8 @@ Arquivos centrais:
 | Orquestração e cache | `smartcut/pipeline.py`, `smartcut/cache.py` |
 | Render | `smartcut/render.py`, `silence/render.py` |
 | SRT, FCPXML e relatório de revisão | `smartcut/export.py` |
+| Temperatura e pausas cooperativas | `smartcut/thermal.py` |
+| Resumo incremental de lote | `smartcut/batch_report.py` |
 
 ## Interface atual
 
@@ -68,6 +78,10 @@ Arquivos centrais:
 - Estado por arquivo preservado ao trocar o vídeo em revisão.
 - Erros de ffmpeg e vídeos sem áudio recebem mensagens curtas e não interrompem
   os outros arquivos do lote.
+- A lista aparece sem esperar todas as miniaturas; posters são cacheados em
+  segundo plano e essa fila pausa durante análise ou renderização.
+- A seleção pode ser por linha, faixa numérica, atalhos de lote ou somente
+  vídeos já prontos para renderizar.
 
 ### Renderização do lote
 
@@ -145,6 +159,7 @@ Abra `http://localhost:8080` para a interface. Outros comandos estão em
 
 ## Próximas evoluções
 
-O backlog em `BACKLOG.md` concentra melhorias de resumo e métricas. Antes de
-criar um novo módulo, registre ali o fluxo de entrada, plano, saída e o que deve
-aparecer em tempo real para quem está editando.
+O backlog em `BACKLOG.md` concentra melhorias priorizadas. Antes de criar um
+novo módulo, consulte `BACKEND_CAPABILITIES.md`, registre no backlog o fluxo de
+entrada, plano, saída e o feedback em tempo real, e mantenha explícito se a
+capacidade é operacional, experimental ou apenas contrato.

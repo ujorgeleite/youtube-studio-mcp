@@ -1,0 +1,28 @@
+# Modelos locais. Troque `vision.default` depois do benchmark da fase 11.
+whisper: mlx-community/whisper-large-v3-turbo
+
+vision:
+  default: qwen3-vl-8b
+  options:
+    qwen3-vl-4b:
+      repo: mlx-community/Qwen3-VL-4B-Instruct-4bit
+      label: Qwen3-VL 4B (4-bit) · mais rápido
+      memory_gb: 5
+    qwen3-vl-8b:
+      repo: mlx-community/Qwen3-VL-8B-Instruct-4bit
+      label: Qwen3-VL 8B (4-bit) · mais detalhado
+      memory_gb: 8
+
+# Limites de amostragem: a passagem ampla cobre o take inteiro; a detalhada
+# olha só janelas promissoras ou ambíguas com sequência de frames.
+sampling:
+  broad_every_s: 12
+  broad_max_frames: 24
+  frames_per_call: 4
+  detail_windows_per_take: 4
+  detail_frames_per_window: 6
+
+# Takes mais curtos que isso chegam desmarcados (só na primeira vez que aparecem;
+# escolhas já salvas no projeto são respeitadas).
+material:
+  min_take_s: 5

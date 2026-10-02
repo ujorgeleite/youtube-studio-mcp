@@ -1,0 +1,11 @@
+# Interface e servidor local
+nicegui==3.17.0
+fastapi==0.141.1
+
+# Análise local de fala e imagem (Apple Silicon)
+mlx-whisper==0.4.3
+mlx-vlm==0.7.4
+
+# Configuração e testes
+pyyaml==6.0.3
+pytest==9.1.1

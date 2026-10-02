@@ -1,0 +1,9 @@
+# Regras de estilo de cena aplicadas depois do planejador, sem modelo.
+# Garantem coerência mesmo quando a IA escolhe trechos picados.
+
+cenas:
+  juntar_mesmo_take_s: 2.0      # blocos seguidos do mesmo take com pausa menor que isso viram um só (evita jump cut)
+  bloco_maximo_s: 75            # não junta além disso
+  bloco_minimo_s: 2.5           # blocos isolados mais curtos saem (exceto abertura e conclusão)
+  palavras_minimas: 3           # falas com menos palavras que isso saem (ex.: “ó.”)
+  papeis_unicos: true           # “gancho” só no início e “conclusao” só no fim do vídeo

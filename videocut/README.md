@@ -1,0 +1,135 @@
+# VideoCut
+
+Montagem por conteúdo, 100% local. O VideoCut descobre as histórias que existem
+nos seus takes, mostra as evidências de cada uma e gera uma primeira montagem
+para continuar a edição no Filmora.
+
+**Seus originais estão seguros:** o VideoCut nunca apaga, move ou sobrescreve
+nada na pasta de origem e recusa uma pasta de saída dentro dela. Tudo o que ele
+gera vai para a pasta irmã `raw__videocut/`.
+
+O resultado é uma montagem editorial forte e revisável, não um corte final. O
+modelo pode errar intenção, humor e contexto familiar; por isso toda afirmação
+aponta para arquivo e timestamp, e nada é montado sem a sua revisão.
+
+## Instalação
+
+Requisitos: macOS com Apple Silicon, Python 3.12+, `ffmpeg`/`ffprobe` e `macmon`
+(temperatura em °C) no PATH: `brew install ffmpeg macmon`.
+
+```bash
+cd videocut
+make install
+make models      # baixa uma vez: Whisper (~1,6 GB) + Qwen3-VL 8B (~5,8 GB)
+make doctor      # confirma que tudo está local
+make ui          # http://localhost:8090
+```
+
+### Funciona sem internet
+
+Depois do `make models`, o VideoCut roda 100% offline: a interface e a CLI
+iniciam com `HF_HUB_OFFLINE=1` e carregam os modelos só do disco
+(`~/.cache/huggingface/hub`). A única etapa que acessa a rede é o próprio
+`make models` (ou a primeira análise, se algum modelo ainda faltar). Para
+baixar também o 4B: `make models MODELS=qwen3-vl-8b,qwen3-vl-4b`.
+
+O download é protegido contra travamentos: se ficar 90 s sem receber dados, é
+reiniciado de onde parou (até 5 tentativas) e o progresso aparece na tela.
+
+### Modo de cargas longas
+
+Interruptor no painel **Execução** da tela Material (ou `cli.py analyze --long-run`).
+Antes de cada chamada ao modelo e de cada bloco do render, o VideoCut lê a
+temperatura (`macmon`) e o estado térmico do macOS. Acima de 95 °C ou em
+“sério”, pausa e só retoma abaixo de 80 °C e em “razoável”. Limites em
+`config/execucao.yaml`. A temperatura aparece nas telas de Análise e Entrega
+mesmo com o modo desligado.
+
+## Fluxo
+
+1. **Material** — escolha a pasta raw, selecione os takes e, se quiser, diga o
+   que queria contar, o formato e a duração desejada.
+2. **Análise** — Whisper transcreve as falas; o modelo visual descreve os takes
+   em duas passagens (ampla + detalhe onde vale a pena). Um take com falha não
+   interrompe o lote.
+3. **Histórias** — propostas de um ou vários vídeos, ou “falta material”, com
+   critérios (mensagem, abertura, desenvolvimento, encerramento, cobertura
+   visual, independência) e evidências clicáveis.
+4. **Revisão** — prévia da sequência com B-roll sobre a fala, sem render.
+   Exclua, restaure, mova, proteja blocos, ajuste frases, troque trechos e peça
+   uma versão mais curta sem analisar de novo.
+5. **Entrega** — MP4, plano JSON, relatório editorial, SRT e timeline XML por
+   vídeo, em `raw__videocut/entregas/`.
+
+### Proxies da câmera (.LRF)
+
+Arquivos `.LRF` com o mesmo nome do vídeo (ex.: `DJI_0001.MP4` +
+`DJI_0001.LRF`) são detectados automaticamente e usados para miniaturas,
+análise e prévia, o que acelera tudo. O render final sempre lê o original.
+
+### Filmora
+
+A timeline é gerada em Final Cut Pro 7 XML (o formato que o Filmora exporta):
+V1 com os blocos, V2 com imagens de apoio, A1 com fala/ambiente e A2 com o som
+do B-roll. Importe em **Arquivo → Importar mídia → Importar Timeline XML**. A
+compatibilidade depende da versão do Filmora e ainda precisa ser confirmada; o
+MP4 é a entrega de referência.
+
+## Linha de comando
+
+```bash
+make analyze INPUT=/caminho/raw                          # análise sem interface
+make compare INPUT=/caminho/raw EDIT=/caminho/final.mp4  # proposta × sua edição
+make benchmark INPUT=/caminho/raw MODELS=qwen3-vl-4b,qwen3-vl-8b
+```
+
+`compare` transcreve a sua edição final, alinha as falas com os takes e mede
+recall, precisão e concordância de ordem. `benchmark` mede tempo, memória de
+pico e respostas inválidas de cada modelo, com descrições lado a lado.
+
+## Memória do Mac
+
+O painel **Memória do Mac** (tela Material) mostra a memória livre, o swap, a
+pressão de memória e os apps que mais ocupam (somando os processos auxiliares
+de cada um, como no Monitor de Atividade), com um passo a passo para liberar.
+O modelo 8B precisa de ~8 GB livres e o 4B de ~5 GB (`config/modelos.yaml`).
+Com memória apertada, o macOS usa o disco (swap) e a análise pode levar o
+dobro do tempo; por isso o app avisa antes de começar. `make doctor` mostra o
+mesmo relatório.
+
+## Rodar de madrugada
+
+Painel **Execução** da tela Material → **Rodar de madrugada** (e, de
+preferência, **Modo de cargas longas**). O app mantém o Mac acordado durante o
+trabalho, confere tomada, baixo consumo e atualizações automáticas e abre o
+painel certo dos Ajustes para o que estiver pendente, sem pedir senha. Detalhes
+em `docs/rodar-a-noite.md`.
+
+## Configurações (⚙ no cabeçalho)
+
+Tudo o que a IA recebe pode ser ajustado dentro do app, sem abrir arquivos:
+
+- **Prompts e regras** — os 4 prompts (`prompts/`) e as regras em YAML
+  (`config/canal.yaml`, `estilo.yaml`, `glossario.yaml`, `modelos.yaml`,
+  `execucao.yaml`). O editor valida as variáveis obrigatórias, mostra a
+  **prévia com dados reais** do projeto aberto e o tamanho em tokens, compara
+  com o padrão, guarda histórico e restaura o padrão. Edições ficam em
+  `.state/ajustes/`; o repositório continua sendo o padrão.
+- **Skills** — instruções reutilizáveis que mudam como o planejador escolhe os
+  trechos (Vlog rápido, Tutorial, Humor da família ou as suas), ativadas por projeto.
+- **Agentes** — etapas extras sobre a montagem escolhida (títulos, descrição e
+  capítulos do YouTube; revisor de ritmo; checagem de nomes). Resultado em
+  `analise/agentes/`; nunca alteram a montagem.
+- **Registro de chamadas** — cada pedido e resposta do modelo, por execução,
+  em `analise/registro/`. É o que se lê para ajustar prompts, regras e skills.
+
+Skills e agentes são Markdown com frontmatter compatível com o `SKILL.md` do
+Claude Code (`name`, `description`). Mudar um prompt de visão refaz a análise
+visual; os do planejador e as regras valem ao clicar em “Refazer histórias”.
+
+O estilo de cena (`config/estilo.yaml`) é aplicado sem modelo depois do
+planejador: junta blocos seguidos do mesmo take, remove sobreposições de áudio
+e fragmentos, e mantém abertura no início e conclusão no fim.
+
+Veja `ARCHITECTURE.md` para os diagramas de arquitetura e fluxo, `CONTEXT.md` para limites
+e decisões, `PLANO.md` para o histórico das fases e `BACKLOG.md` para o que vem a seguir.

@@ -1,0 +1,10 @@
+# Modo de cargas longas: pausa entre chamadas quando o Mac passa do limite e só
+# retoma depois de esfriar. Ligado por projeto na tela Material (padrão: desligado).
+# Estados do macOS: 0 normal, 1 razoável, 2 sério, 3 crítico.
+long_run:
+  pause_state: 2        # pausa a partir de "sério"
+  resume_state: 1       # retoma em "razoável" ou melhor
+  pause_temp_c: 95      # ou quando CPU/GPU passar disso (macmon)
+  resume_temp_c: 80     # e só retoma abaixo disso
+  poll_s: 10            # intervalo entre leituras durante a pausa
+  max_wait_min: 45      # nunca espera mais que isso (continua com aviso)
